@@ -46,6 +46,7 @@ DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 DB_PATH = os.path.join(DATA_DIR, "quiz.db")
 
+os.makedirs(DATA_DIR, exist_ok=True)
 # Có thể đổi model:
 #   setx GEMINI_MODEL "gemini-2.5-flash"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
