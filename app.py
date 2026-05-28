@@ -2994,7 +2994,7 @@ BASE_CSS = """
 
 HOME_HTML = BASE_CSS + """
 <div class="nav">
-    <b>THPTQG PDF Quiz</b>
+    <b>Thi thử THPTQG</b>
     <div><a href="/admin/login">Admin</a></div>
 </div>
 
