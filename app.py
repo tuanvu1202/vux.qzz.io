@@ -85,6 +85,16 @@ SUBJECTS = {
         "part1_point": 0.25,
         "part3_point": 0,
     },
+    "english": {
+        "label": "Tiếng Anh",
+        "icon": "EN",
+        "duration_minutes": 50,
+        "part1_count": 60,
+        "part2_count": 0,
+        "part3_count": 0,
+        "part1_point": 10 / 60,
+        "part3_point": 0,
+    },
 }
 
 # Điểm đúng/sai: trong 1 câu đúng/sai có 4 ý.
@@ -342,6 +352,7 @@ Cấu trúc bắt buộc:
 - Phần I có đúng {cfg["part1_count"]} câu trắc nghiệm A/B/C/D.
 - Phần II có đúng {cfg["part2_count"]} câu đúng/sai, mỗi câu có 4 ý a,b,c,d.
 - Phần III có đúng {cfg["part3_count"]} câu trả lời ngắn. Nếu môn không có phần III thì part3 là object rỗng.
+- Nếu Phần II có 0 câu thì part2 là object rỗng. Nếu Phần III có 0 câu thì part3 là object rỗng.
 
 Yêu cầu đọc:
 - Đọc theo bố cục bảng trong ảnh, không đọc lẫn cột.
@@ -838,6 +849,13 @@ BASE_CSS = """
     <meta property="og:type" content="website">
 
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%0A%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2222%22%20fill%3D%22%23111827%22/%3E%0A%3Ctext%20x%3D%2250%22%20y%3D%2262%22%20font-size%3D%2254%22%20text-anchor%3D%22middle%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-weight%3D%22700%22%20fill%3D%22%23ffffff%22%3EQ%3C/text%3E%0A%3Ccircle%20cx%3D%2274%22%20cy%3D%2228%22%20r%3D%2210%22%20fill%3D%22%232563eb%22/%3E%0A%3C/svg%3E">
+
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem("theme") || "light";
+            document.documentElement.setAttribute("data-theme", savedTheme);
+        })();
+    </script>
 </head>
 <body>
 
@@ -2988,7 +3006,1542 @@ BASE_CSS = """
     }
 
 
+
+    /* ===== Dark / Light mode ===== */
+    .theme-toggle {
+        width: auto;
+        margin: 0 0 0 12px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,.22);
+        background: rgba(255,255,255,.10);
+        color: #fff;
+        font-weight: 800;
+        font-size: 14px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .theme-toggle:hover {
+        background: rgba(255,255,255,.18);
+    }
+
+    html[data-theme="dark"] body {
+        background: #0f172a;
+        color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .nav {
+        background: #020617;
+        border-bottom: 1px solid #1e293b;
+    }
+
+    html[data-theme="dark"] .card,
+    html[data-theme="dark"] .review-section,
+    html[data-theme="dark"] .review-panel,
+    html[data-theme="dark"] .result-panel,
+    html[data-theme="dark"] .sheet-card {
+        background: #111827;
+        color: #e5e7eb;
+        box-shadow: 0 8px 24px rgba(0,0,0,.35);
+        border: 1px solid #1f2937;
+    }
+
+    html[data-theme="dark"] .muted,
+    html[data-theme="dark"] .sheet-caption,
+    html[data-theme="dark"] .rs-note,
+    html[data-theme="dark"] .digit-label,
+    html[data-theme="dark"] .short-help {
+        color: #94a3b8;
+    }
+
+    html[data-theme="dark"] a {
+        color: #60a5fa;
+    }
+
+    html[data-theme="dark"] input,
+    html[data-theme="dark"] select,
+    html[data-theme="dark"] textarea {
+        background: #020617;
+        color: #e5e7eb;
+        border-color: #334155;
+    }
+
+    html[data-theme="dark"] input::placeholder,
+    html[data-theme="dark"] textarea::placeholder {
+        color: #64748b;
+    }
+
+    html[data-theme="dark"] .mini,
+    html[data-theme="dark"] .option,
+    html[data-theme="dark"] .summary-box,
+    html[data-theme="dark"] .simple-stat,
+    html[data-theme="dark"] .compare-box,
+    html[data-theme="dark"] .wrong-compact,
+    html[data-theme="dark"] .answer-card,
+    html[data-theme="dark"] .review-item,
+    html[data-theme="dark"] .tf-review-cell,
+    html[data-theme="dark"] .exam-list-card {
+        background: #0b1220;
+        border-color: #1f2937;
+        color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .answer-sheet,
+    html[data-theme="dark"] .result-sheet {
+        background: #f8fafc;
+        color: #111827;
+    }
+
+    html[data-theme="dark"] .pdf,
+    html[data-theme="dark"] .review-pdf,
+    html[data-theme="dark"] .result-pdf,
+    html[data-theme="dark"] .result-compact-pdf {
+        background: #111827;
+        border: 1px solid #1f2937;
+    }
+
+    html[data-theme="dark"] .submit-bar {
+        background: rgba(15,23,42,.95);
+        border-color: #334155;
+    }
+
+    html[data-theme="dark"] .quick-actions a,
+    html[data-theme="dark"] .result-actions a,
+    html[data-theme="dark"] .result-actions-small a,
+    html[data-theme="dark"] .review-toolbar a,
+    html[data-theme="dark"] .filter-chip {
+        background: #0b1220;
+        color: #e5e7eb;
+        border-color: #334155;
+    }
+
+    html[data-theme="dark"] .filter-chip.active {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+
+    html[data-theme="dark"] .subject-icon,
+    html[data-theme="dark"] .subject-pill {
+        filter: brightness(.92);
+    }
+
+    html[data-theme="dark"] pre {
+        background: #020617;
+        color: #dbeafe;
+        border: 1px solid #1f2937;
+    }
+
+    html[data-theme="dark"] .theme-toggle {
+        background: #f8fafc;
+        color: #111827;
+        border-color: #f8fafc;
+    }
+
+
+
+    /* ===== Dark mode cho phiếu trả lời / phiếu kết quả ===== */
+    html[data-theme="dark"] .answer-sheet,
+    html[data-theme="dark"] .result-sheet {
+        background: #111827;
+        color: #e5e7eb;
+        border-color: #475569;
+        box-shadow: 0 12px 32px rgba(0,0,0,.35);
+    }
+
+    html[data-theme="dark"] .sheet-section,
+    html[data-theme="dark"] .rs-section {
+        border-bottom-color: #475569;
+    }
+
+    html[data-theme="dark"] .sheet-title,
+    html[data-theme="dark"] .rs-title {
+        background: #1e293b;
+        color: #f8fafc;
+        border-bottom-color: #475569;
+    }
+
+    html[data-theme="dark"] .scan-mark {
+        background: #f8fafc;
+    }
+
+    html[data-theme="dark"] .mc-col,
+    html[data-theme="dark"] .tf-block,
+    html[data-theme="dark"] .short-box,
+    html[data-theme="dark"] .rs-mc-col,
+    html[data-theme="dark"] .rs-tf-block {
+        border-color: #475569;
+        background: #0f172a;
+    }
+
+    html[data-theme="dark"] .mc-header,
+    html[data-theme="dark"] .tf-head,
+    html[data-theme="dark"] .rs-mc-header,
+    html[data-theme="dark"] .rs-tf-head {
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .mc-num,
+    html[data-theme="dark"] .tf-letter,
+    html[data-theme="dark"] .short-title,
+    html[data-theme="dark"] .rs-num,
+    html[data-theme="dark"] .rs-letter,
+    html[data-theme="dark"] .rs-tf-title {
+        color: #f8fafc;
+    }
+
+    html[data-theme="dark"] .circle-choice span,
+    html[data-theme="dark"] .tf-choice span,
+    html[data-theme="dark"] .digit-choice span,
+    html[data-theme="dark"] .rs-circle {
+        background: #020617;
+        border-color: #94a3b8;
+    }
+
+    html[data-theme="dark"] .circle-choice span:hover,
+    html[data-theme="dark"] .tf-choice span:hover,
+    html[data-theme="dark"] .digit-choice span:hover {
+        background: #172554;
+        border-color: #60a5fa;
+    }
+
+    html[data-theme="dark"] .circle-choice input:checked + span,
+    html[data-theme="dark"] .tf-choice input:checked + span.true,
+    html[data-theme="dark"] .tf-choice input:checked + span.false,
+    html[data-theme="dark"] .digit-choice input:checked + span {
+        background: #e5e7eb;
+        border-color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .circle-choice input:checked + span::after,
+    html[data-theme="dark"] .tf-choice input:checked + span::after,
+    html[data-theme="dark"] .digit-choice input:checked + span::after {
+        background: #111827;
+    }
+
+    html[data-theme="dark"] .short-input-row .short-input,
+    html[data-theme="dark"] .short-input {
+        background: #020617;
+        color: #f8fafc;
+        border-color: #475569;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,.35);
+    }
+
+    html[data-theme="dark"] .clear-short-btn {
+        background: #2b1111;
+        color: #fecaca;
+        border-color: #7f1d1d;
+    }
+
+    html[data-theme="dark"] .clear-short-btn:hover {
+        background: #3b1111;
+        border-color: #991b1b;
+    }
+
+    html[data-theme="dark"] .sheet-caption,
+    html[data-theme="dark"] .rs-note,
+    html[data-theme="dark"] .digit-label,
+    html[data-theme="dark"] .digit-choice small {
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .rs-circle.answer {
+        border-color: #22c55e;
+        background: #14532d;
+    }
+
+    html[data-theme="dark"] .rs-circle.answer::after {
+        color: #bbf7d0;
+    }
+
+    html[data-theme="dark"] .rs-circle.user-wrong {
+        border-color: #ef4444;
+        background: #7f1d1d;
+    }
+
+    html[data-theme="dark"] .rs-circle.user-wrong::after {
+        color: #fecaca;
+    }
+
+    html[data-theme="dark"] .rs-circle.user-correct,
+    html[data-theme="dark"] .rs-circle.correct {
+        background: #e5e7eb;
+        border-color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .rs-circle.user-correct::after {
+        background: #111827;
+    }
+
+    html[data-theme="dark"] .rs-mc-line.unanswered,
+    html[data-theme="dark"] .rs-tf-line.unanswered {
+        background: #1f2937;
+        border-color: #64748b;
+    }
+
+    html[data-theme="dark"] .rs-short-table {
+        color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .rs-short-table th,
+    html[data-theme="dark"] .rs-short-table td {
+        border-bottom-color: #334155;
+    }
+
+
+
+    /* ===== Nav actions đẹp hơn ===== */
+    .nav > div:last-child {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nav > div:last-child a,
+    .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 42px;
+        padding: 0 16px;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 15px;
+        text-decoration: none;
+        transition: all .18s ease;
+    }
+
+    .nav > div:last-child a {
+        border: 1px solid rgba(255,255,255,.14);
+        background: rgba(255,255,255,.06);
+        color: #dbeafe;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+    .nav > div:last-child a:hover {
+        background: rgba(255,255,255,.12);
+        color: #ffffff;
+        border-color: rgba(255,255,255,.22);
+        transform: translateY(-1px);
+    }
+
+    .theme-toggle {
+        min-width: 96px;
+        margin: 0;
+        padding: 0 16px;
+        border: 1px solid rgba(255,255,255,.16);
+        background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.08));
+        color: #ffffff;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 4px 14px rgba(0,0,0,.18);
+    }
+
+    .theme-toggle:hover {
+        background: linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.12));
+        transform: translateY(-1px);
+    }
+
+    .theme-toggle:active,
+    .nav > div:last-child a:active {
+        transform: translateY(0);
+    }
+
+    html[data-theme="dark"] .nav > div:last-child a {
+        background: rgba(15,23,42,.92);
+        color: #e5e7eb;
+        border-color: #334155;
+    }
+
+    html[data-theme="dark"] .nav > div:last-child a:hover {
+        background: #162033;
+        color: #ffffff;
+        border-color: #475569;
+    }
+
+    html[data-theme="dark"] .theme-toggle {
+        background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+        color: #0f172a;
+        border-color: #e2e8f0;
+        box-shadow: 0 4px 14px rgba(0,0,0,.28);
+    }
+
+    html[data-theme="dark"] .theme-toggle:hover {
+        background: linear-gradient(180deg, #ffffff, #e5e7eb);
+    }
+
+    @media (max-width: 640px) {
+        .nav {
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav > div:last-child {
+            width: 100%;
+            justify-content: flex-end;
+        }
+
+        .nav > div:last-child a,
+        .theme-toggle {
+            height: 38px;
+            padding: 0 14px;
+            font-size: 14px;
+        }
+    }
+
+
+
+    .subject-icon.english {
+        background: #fff7ed;
+        color: #9a3412;
+        border-color: #fed7aa;
+        font-size: 22px;
+        letter-spacing: -1px;
+    }
+
+    .subject-pill.english {
+        background: #fff7ed;
+        color: #9a3412;
+        border-color: #fed7aa;
+    }
+
+
+
+    /* Font riêng cho ô trả lời ngắn: không dùng Times New Roman */
+    .answer-sheet .short-input-row,
+    .answer-sheet .short-input,
+    .answer-sheet .clear-short-btn,
+    .answer-sheet .digit-omr,
+    .answer-sheet .digit-omr * {
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+    }
+
+    .short-input-row .short-input,
+    .answer-sheet .short-input {
+        font-weight: 700;
+        letter-spacing: .1px;
+    }
+
+    .clear-short-btn {
+        font-weight: 800;
+    }
+
+
+
+    /* Nút xóa phần trả lời ngắn: mềm và hiện đại hơn */
+    .clear-short-btn {
+        min-width: 74px;
+        height: 46px;
+        padding: 0 18px;
+        border-radius: 14px;
+        border: 1px solid #f3b5b5;
+        background: linear-gradient(180deg, #fff6f6 0%, #ffecec 100%);
+        color: #c24141;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+        font-weight: 800;
+        font-size: 18px;
+        letter-spacing: .1px;
+        box-shadow: 0 8px 18px rgba(220, 38, 38, .08), inset 0 1px 0 rgba(255,255,255,.75);
+        transition: all .18s ease;
+    }
+
+    .clear-short-btn:hover {
+        background: linear-gradient(180deg, #fff1f1 0%, #ffe3e3 100%);
+        border-color: #ee9b9b;
+        color: #b91c1c;
+        box-shadow: 0 10px 22px rgba(220, 38, 38, .12), inset 0 1px 0 rgba(255,255,255,.85);
+        transform: translateY(-1px);
+    }
+
+    .clear-short-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 5px 12px rgba(220, 38, 38, .10), inset 0 1px 0 rgba(255,255,255,.55);
+    }
+
+    html[data-theme="dark"] .clear-short-btn {
+        border-color: #7f1d1d;
+        background: linear-gradient(180deg, #2e1212 0%, #411515 100%);
+        color: #fecaca;
+        box-shadow: 0 8px 18px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.03);
+    }
+
+    html[data-theme="dark"] .clear-short-btn:hover {
+        background: linear-gradient(180deg, #3a1717 0%, #521919 100%);
+        border-color: #991b1b;
+        color: #ffe4e6;
+        box-shadow: 0 10px 22px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+
+
+    /* Nút xóa trả lời ngắn: bản nhỏ chỉ icon X */
+    .clear-short-btn {
+        width: 38px !important;
+        min-width: 38px !important;
+        height: 38px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border-radius: 50% !important;
+        border: 1px solid #fca5a5 !important;
+        background: #fff5f5 !important;
+        color: #dc2626 !important;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+        font-size: 22px !important;
+        line-height: 1 !important;
+        font-weight: 700 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: none !important;
+        transition: .15s ease !important;
+    }
+
+    .clear-short-btn:hover {
+        background: #fee2e2 !important;
+        border-color: #ef4444 !important;
+        color: #b91c1c !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    .clear-short-btn:active {
+        transform: scale(.94) !important;
+    }
+
+    html[data-theme="dark"] .clear-short-btn {
+        background: #2a1111 !important;
+        border-color: #7f1d1d !important;
+        color: #fecaca !important;
+        box-shadow: none !important;
+    }
+
+    html[data-theme="dark"] .clear-short-btn:hover {
+        background: #3b1515 !important;
+        border-color: #991b1b !important;
+        color: #fee2e2 !important;
+    }
+
+
+    /* Nav link trong dark mode: chữ trắng rõ hơn */
+    html[data-theme="dark"] .nav a,
+    html[data-theme="dark"] .nav > div:last-child a {
+        color: #ffffff !important;
+    }
+
+
+    /* Thanh chỉnh kích thước file đề PDF */
+    .pdf-tools {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 8px 10px;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: rgba(255,255,255,.88);
+        box-shadow: 0 6px 18px rgba(15,23,42,.06);
+    }
+
+    .pdf-tools span {
+        margin-right: auto;
+        color: #64748b;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .pdf-size-btn {
+        width: auto;
+        height: 34px;
+        margin: 0;
+        padding: 0 12px;
+        border-radius: 999px;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .pdf-size-btn:hover {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+    }
+
+    .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-tools {
+        background: #111827;
+        border-color: #334155;
+        box-shadow: 0 8px 24px rgba(0,0,0,.24);
+    }
+
+    html[data-theme="dark"] .pdf-tools span {
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .pdf-size-btn {
+        background: #020617;
+        border-color: #475569;
+        color: #e5e7eb;
+    }
+
+    html[data-theme="dark"] .pdf-size-btn:hover {
+        background: #172554;
+        border-color: #60a5fa;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    @media (max-width: 1080px) {
+        .pdf-tools {
+            justify-content: flex-start;
+            flex-wrap: wrap;
+        }
+        .pdf-tools span {
+            width: 100%;
+            margin-right: 0;
+        }
+    }
+
+
+    /* Bộ chỉnh độ rộng đề: chuyển sang dạng nổi, không chiếm diện tích đọc PDF */
+    .pdf-floating-tools {
+        position: fixed;
+        left: 22px;
+        top: 86px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.82);
+        border: 1px solid rgba(203,213,225,.8);
+        box-shadow: 0 10px 26px rgba(15,23,42,.14);
+        backdrop-filter: blur(10px);
+    }
+
+    .pdf-floating-tools .pdf-size-btn {
+        width: auto;
+        height: 30px;
+        margin: 0;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: none;
+    }
+
+    .pdf-floating-tools .pdf-size-btn:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .pdf-floating-tools .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-floating-tools {
+        background: rgba(15,23,42,.78);
+        border-color: rgba(71,85,105,.85);
+        box-shadow: 0 10px 26px rgba(0,0,0,.28);
+    }
+
+    html[data-theme="dark"] .pdf-floating-tools .pdf-size-btn {
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .pdf-floating-tools .pdf-size-btn:hover {
+        background: #172554;
+        border-color: #3b82f6;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-floating-tools .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    @media (max-width: 1080px) {
+        .pdf-floating-tools {
+            position: sticky;
+            top: 8px;
+            left: auto;
+            width: fit-content;
+            margin: 0 0 8px auto;
+        }
+    }
+
+
+    /* Nút chỉnh độ rộng đề đặt ở panel phải, không che PDF */
+    .sheet-top-actions,
+    .result-head-side {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .pdf-inline-tools {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+        border: 1px solid #dbe4f0;
+        background: rgba(255,255,255,.85);
+    }
+
+    .pdf-inline-tools .pdf-size-btn {
+        width: auto;
+        height: 30px;
+        margin: 0;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: none;
+    }
+
+    .pdf-inline-tools .pdf-size-btn:hover {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+    }
+
+    .pdf-inline-tools .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-inline-tools {
+        background: rgba(15,23,42,.75);
+        border-color: #334155;
+    }
+
+    html[data-theme="dark"] .pdf-inline-tools .pdf-size-btn {
+        color: #cbd5e1;
+    }
+
+    html[data-theme="dark"] .pdf-inline-tools .pdf-size-btn:hover {
+        background: #172554;
+        border-color: #3b82f6;
+        color: #ffffff;
+    }
+
+    html[data-theme="dark"] .pdf-inline-tools .pdf-size-btn.active {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #ffffff;
+    }
+
+    /* vô hiệu block floating cũ nếu còn */
+    .pdf-floating-tools {
+        display: none !important;
+    }
+
+    @media (max-width: 1080px) {
+        .sheet-top-actions,
+        .result-head-side {
+            width: 100%;
+            justify-content: space-between;
+        }
+    }
+
+
+    /* Fix header phiếu trả lời + nút độ rộng đề không tràn chữ */
+    .sheet-top,
+    .review-headline {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 14px;
+    }
+
+    .sheet-top-actions,
+    .result-head-side {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+    }
+
+    .pdf-inline-tools {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+    }
+
+    .pdf-inline-tools .pdf-size-btn {
+        white-space: nowrap;
+        word-break: keep-all;
+        min-width: 58px;
+        height: 32px;
+        padding: 0 12px;
+        font-size: 13px;
+        line-height: 1;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+        letter-spacing: 0;
+    }
+
+    .timer,
+    .review-score {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    /* Giảm khoảng trống thừa và giúp PDF dễ đọc hơn */
+    .grid {
+        grid-template-columns: minmax(0, 1.22fr) minmax(390px, 470px);
+        gap: 14px;
+    }
+
+    .review-sheet-layout {
+        grid-template-columns: minmax(0, 1.22fr) minmax(390px, 470px);
+        gap: 14px;
+    }
+
+    .pdf,
+    .review-pdf {
+        display: block;
+        width: 100%;
+        height: calc(100vh - 92px);
+        min-height: 700px;
+    }
+
+    /* Ở màn hình vừa thì xếp dọc để tránh vùng trống / lệch layout */
+    @media (max-width: 1360px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 72vh;
+            min-height: 620px;
+        }
+    }
+
+    @media (max-width: 900px) {
+        .sheet-top,
+        .review-headline {
+            grid-template-columns: 1fr;
+        }
+
+        .sheet-top-actions,
+        .result-head-side {
+            width: 100%;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .pdf-inline-tools {
+            order: 2;
+        }
+
+        .timer,
+        .review-score {
+            order: 1;
+        }
+    }
+
+    @media (max-width: 560px) {
+        .pdf-inline-tools {
+            gap: 4px;
+            padding: 3px;
+        }
+
+        .pdf-inline-tools .pdf-size-btn {
+            min-width: 52px;
+            height: 30px;
+            padding: 0 10px;
+            font-size: 12px;
+        }
+    }
+
+
+    /* Fix layout PDF/phiếu: không bóp phiếu trả lời khi phóng đề */
+    .grid,
+    .review-sheet-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(520px, 540px);
+        gap: 16px;
+    }
+
+    .grid > div,
+    .review-sheet-layout > div {
+        min-width: 0;
+    }
+
+    .pdf,
+    .review-pdf {
+        display: block;
+        width: 100%;
+        height: calc(100vh - 96px);
+        min-height: 720px;
+    }
+
+    .pdf-stacked-mode .pdf,
+    .pdf-stacked-mode .review-pdf {
+        height: 82vh;
+        min-height: 760px;
+    }
+
+    .sheet-top,
+    .review-headline {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 14px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .sheet-top > div:first-child,
+    .review-headline > div:first-child {
+        min-width: 260px;
+        flex: 1 1 260px;
+    }
+
+    .sheet-top h1,
+    .review-headline h1 {
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        line-height: 1.15 !important;
+    }
+
+    .sheet-top-actions,
+    .result-head-side {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 10px !important;
+        flex: 0 0 auto !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .pdf-inline-tools {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+    }
+
+    .pdf-inline-tools .pdf-size-btn {
+        min-width: 64px !important;
+        height: 32px !important;
+        padding: 0 12px !important;
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+        line-height: 1 !important;
+        font-size: 13px !important;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+    }
+
+    .timer,
+    .review-score {
+        flex: 0 0 auto !important;
+        white-space: nowrap !important;
+    }
+
+    /* Ẩn style floating cũ nếu còn sót */
+    .pdf-floating-tools {
+        display: none !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 74vh;
+            min-height: 640px;
+        }
+    }
+
+    @media (max-width: 620px) {
+        .sheet-top-actions,
+        .result-head-side {
+            width: 100% !important;
+            justify-content: space-between !important;
+            flex-wrap: wrap !important;
+        }
+
+        .sheet-top > div:first-child,
+        .review-headline > div:first-child {
+            min-width: 0;
+            flex-basis: 100%;
+        }
+
+        .pdf-inline-tools .pdf-size-btn {
+            min-width: 56px !important;
+            padding: 0 10px !important;
+            font-size: 12px !important;
+        }
+    }
+
+
+    /* Resize kéo thả giữa đề PDF và phiếu trả lời */
+    .grid,
+    .review-sheet-layout {
+        grid-template-columns: minmax(420px, var(--pdf-col, 1fr)) 10px minmax(520px, 540px) !important;
+        gap: 12px !important;
+        align-items: start;
+    }
+
+    .pdf-pane,
+    .answer-pane {
+        min-width: 0;
+    }
+
+    .answer-pane {
+        min-width: 520px;
+    }
+
+    .split-resizer {
+        width: 10px;
+        min-height: calc(100vh - 110px);
+        border-radius: 999px;
+        cursor: col-resize;
+        background: transparent;
+        position: sticky;
+        top: 90px;
+        transition: background .15s ease, box-shadow .15s ease;
+    }
+
+    .split-resizer::before {
+        content: "";
+        display: block;
+        width: 4px;
+        height: 72px;
+        margin: 40vh auto 0;
+        border-radius: 999px;
+        background: #cbd5e1;
+        opacity: .45;
+    }
+
+    .split-resizer:hover,
+    body.resizing-pdf .split-resizer {
+        background: rgba(37,99,235,.08);
+        box-shadow: inset 0 0 0 1px rgba(37,99,235,.15);
+    }
+
+    .split-resizer:hover::before,
+    body.resizing-pdf .split-resizer::before {
+        background: #2563eb;
+        opacity: 1;
+    }
+
+    html[data-theme="dark"] .split-resizer::before {
+        background: #64748b;
+    }
+
+    html[data-theme="dark"] .split-resizer:hover,
+    html[data-theme="dark"] body.resizing-pdf .split-resizer {
+        background: rgba(96,165,250,.10);
+        box-shadow: inset 0 0 0 1px rgba(96,165,250,.22);
+    }
+
+    html[data-theme="dark"] .split-resizer:hover::before,
+    html[data-theme="dark"] body.resizing-pdf .split-resizer::before {
+        background: #60a5fa;
+    }
+
+    .pdf,
+    .review-pdf {
+        width: 100%;
+        height: calc(100vh - 96px);
+        min-height: 720px;
+    }
+
+    /* Nút Vừa/To/Rất to giờ là preset nhanh, còn kéo thả là chính */
+    .pdf-inline-tools .pdf-size-btn {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+        min-width: 58px !important;
+        height: 32px !important;
+        padding: 0 12px !important;
+        font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif !important;
+        font-size: 13px !important;
+        line-height: 1 !important;
+    }
+
+    .sheet-top,
+    .review-headline {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 14px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .sheet-top > div:first-child,
+    .review-headline > div:first-child {
+        min-width: 260px;
+        flex: 1 1 260px;
+    }
+
+    .sheet-top h1,
+    .review-headline h1 {
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        line-height: 1.15 !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+        }
+
+        .split-resizer {
+            display: none;
+        }
+
+        .answer-pane {
+            min-width: 0;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 74vh;
+            min-height: 640px;
+        }
+    }
+
+
+    /* ===== Fix cuối: bỏ khoảng trống dư, PDF bám trái, kéo không làm nát layout ===== */
+    .container:has(.grid),
+    .container:has(.review-sheet-layout) {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 14px !important;
+    }
+
+    .grid,
+    .review-sheet-layout {
+        width: 100% !important;
+        max-width: none !important;
+        grid-template-columns: minmax(520px, var(--pdf-col, calc(100vw - 610px))) 10px minmax(520px, 560px) !important;
+        gap: 12px !important;
+        align-items: start !important;
+        justify-content: start !important;
+    }
+
+    .pdf-pane,
+    .answer-pane {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .answer-pane {
+        min-width: 520px !important;
+    }
+
+    .pdf,
+    .review-pdf {
+        width: 100% !important;
+        max-width: none !important;
+        display: block !important;
+        margin: 0 !important;
+        height: calc(100vh - 92px) !important;
+        min-height: 720px !important;
+        border-radius: 16px !important;
+    }
+
+    .split-resizer {
+        align-self: stretch !important;
+        min-height: calc(100vh - 92px) !important;
+        position: sticky !important;
+        top: 82px !important;
+    }
+
+    .sheet-top,
+    .review-headline {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .sheet-top > div:first-child,
+    .review-headline > div:first-child {
+        min-width: 0 !important;
+        flex: 1 1 240px !important;
+    }
+
+    .sheet-top h1,
+    .review-headline h1 {
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        line-height: 1.15 !important;
+    }
+
+    .sheet-top-actions,
+    .result-head-side {
+        flex: 0 0 auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 10px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .pdf-inline-tools,
+    .timer,
+    .review-score {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    .pdf-inline-tools .pdf-size-btn {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        min-width: 58px !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+
+        .split-resizer {
+            display: none !important;
+        }
+
+        .answer-pane {
+            min-width: 0 !important;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 76vh !important;
+            min-height: 620px !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .container:has(.grid),
+        .container:has(.review-sheet-layout) {
+            padding: 8px !important;
+        }
+
+        .sheet-top-actions,
+        .result-head-side {
+            width: 100% !important;
+            justify-content: space-between !important;
+            flex-wrap: wrap !important;
+        }
+    }
+
+
+    /* Bản mới: chỉ kéo thanh giữa, bỏ nút Vừa/To/Rất to */
+    .pdf-inline-tools,
+    .pdf-floating-tools,
+    .pdf-tools {
+        display: none !important;
+    }
+
+    .container:has(.grid),
+    .container:has(.review-sheet-layout) {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 14px !important;
+    }
+
+    .grid,
+    .review-sheet-layout {
+        width: 100% !important;
+        max-width: none !important;
+        grid-template-columns: minmax(520px, var(--pdf-col, calc(100vw - 640px))) 10px minmax(560px, 590px) !important;
+        gap: 12px !important;
+        align-items: start !important;
+        justify-content: start !important;
+    }
+
+    .pdf-pane,
+    .answer-pane {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .answer-pane {
+        min-width: 560px !important;
+    }
+
+    .pdf,
+    .review-pdf {
+        width: 100% !important;
+        max-width: none !important;
+        display: block !important;
+        margin: 0 !important;
+        height: calc(100vh - 92px) !important;
+        min-height: 720px !important;
+        border-radius: 16px !important;
+    }
+
+    .split-resizer {
+        display: block !important;
+        width: 10px !important;
+        align-self: stretch !important;
+        min-height: calc(100vh - 92px) !important;
+        position: sticky !important;
+        top: 82px !important;
+        cursor: col-resize !important;
+    }
+
+    .sheet-top-actions,
+    .result-head-side {
+        flex: 0 0 auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 10px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .timer,
+    .review-score {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+
+        .split-resizer {
+            display: none !important;
+        }
+
+        .answer-pane {
+            min-width: 0 !important;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 76vh !important;
+            min-height: 620px !important;
+        }
+    }
+
+
+    /* Bản chốt: bỏ thanh kéo, layout cố định gọn */
+    .split-resizer {
+        display: none !important;
+    }
+
+    .container:has(.grid),
+    .container:has(.review-sheet-layout) {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 14px !important;
+    }
+
+    .grid,
+    .review-sheet-layout {
+        width: 100% !important;
+        max-width: none !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(560px, 590px) !important;
+        gap: 14px !important;
+        align-items: start !important;
+    }
+
+    .pdf-pane,
+    .answer-pane {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .answer-pane {
+        min-width: 560px !important;
+    }
+
+    .pdf,
+    .review-pdf {
+        width: 100% !important;
+        max-width: none !important;
+        display: block !important;
+        margin: 0 !important;
+        height: calc(100vh - 92px) !important;
+        min-height: 720px !important;
+        border-radius: 16px !important;
+    }
+
+    .sheet-top,
+    .review-headline {
+        display: flex !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: 12px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .sheet-top > div:first-child,
+    .review-headline > div:first-child {
+        min-width: 0 !important;
+        flex: 1 1 240px !important;
+    }
+
+    .sheet-top h1,
+    .review-headline h1 {
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        line-height: 1.15 !important;
+    }
+
+    .sheet-top-actions,
+    .result-head-side {
+        flex: 0 0 auto !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 10px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .pdf-inline-tools,
+    .pdf-floating-tools,
+    .pdf-tools {
+        display: none !important;
+    }
+
+    .timer,
+    .review-score {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+
+        .answer-pane {
+            min-width: 0 !important;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 76vh !important;
+            min-height: 620px !important;
+        }
+    }
+
 </style>
+
+<script>
+    (function () {
+        try {
+            localStorage.removeItem("pdfSize");
+            localStorage.removeItem("pdfDragWidth");
+            localStorage.removeItem("pdfDragWidthV2");
+        } catch (e) {}
+    })();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+    (function () {
+        function applyTheme(theme) {
+            document.documentElement.setAttribute("data-theme", theme);
+            localStorage.setItem("theme", theme);
+
+            const btn = document.getElementById("themeToggle");
+            if (btn) {
+                btn.textContent = theme === "dark" ? "☀ Light" : "🌙 Dark";
+                btn.title = theme === "dark" ? "Đổi sang light mode" : "Đổi sang dark mode";
+                btn.setAttribute("aria-label", btn.title);
+            }
+        }
+
+        function initThemeToggle() {
+            const nav = document.querySelector(".nav");
+            if (!nav || document.getElementById("themeToggle")) return;
+
+            let rightArea = nav.querySelector("div:last-child");
+            if (!rightArea || rightArea === nav) {
+                rightArea = document.createElement("div");
+                nav.appendChild(rightArea);
+            }
+
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.id = "themeToggle";
+            btn.className = "theme-toggle";
+            rightArea.appendChild(btn);
+
+            const currentTheme = localStorage.getItem("theme") || "light";
+            applyTheme(currentTheme);
+
+            btn.addEventListener("click", function () {
+                const now = document.documentElement.getAttribute("data-theme") || "light";
+                applyTheme(now === "dark" ? "light" : "dark");
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initThemeToggle);
+        } else {
+            initThemeToggle();
+        }
+    })();
+</script>
+
 """
 
 
@@ -3010,6 +4563,7 @@ HOME_HTML = BASE_CSS + """
             <a class="filter-chip {% if selected_subject == 'math' %}active{% endif %}" href="/?subject=math">Toán</a>
             <a class="filter-chip {% if selected_subject == 'physics' %}active{% endif %}" href="/?subject=physics">Lí</a>
             <a class="filter-chip {% if selected_subject == 'cs' %}active{% endif %}" href="/?subject=cs">Tin</a>
+            <a class="filter-chip {% if selected_subject == 'english' %}active{% endif %}" href="/?subject=english">Tiếng Anh</a>
         </div>
     </div>
 
@@ -3169,24 +4723,26 @@ EDIT_ANSWERS_HTML = BASE_CSS + """
             {% endfor %}
         </div>
 
-        <h2 class="section-title">Phần II - Đúng/Sai</h2>
-        {% for n in part2_numbers %}
-            <div class="question">
-                <h3>Câu {{ n }}</h3>
-                <div class="admin-answer-grid">
-                    {% for letter in ['a', 'b', 'c', 'd'] %}
-                        <div class="mini">
-                            <b>{{ letter }})</b>
-                            <select name="p2_{{ n }}_{{ letter }}">
-                                <option value="">--</option>
-                                <option value="true" {% if data.answers.part2.get(n|string, {}).get(letter) == true %}selected{% endif %}>Đúng</option>
-                                <option value="false" {% if data.answers.part2.get(n|string, {}).get(letter) == false %}selected{% endif %}>Sai</option>
-                            </select>
-                        </div>
-                    {% endfor %}
+        {% if cfg.part2_count > 0 %}
+            <h2 class="section-title">Phần II - Đúng/Sai</h2>
+            {% for n in part2_numbers %}
+                <div class="question">
+                    <h3>Câu {{ n }}</h3>
+                    <div class="admin-answer-grid">
+                        {% for letter in ['a', 'b', 'c', 'd'] %}
+                            <div class="mini">
+                                <b>{{ letter }})</b>
+                                <select name="p2_{{ n }}_{{ letter }}">
+                                    <option value="">--</option>
+                                    <option value="true" {% if data.answers.part2.get(n|string, {}).get(letter) == true %}selected{% endif %}>Đúng</option>
+                                    <option value="false" {% if data.answers.part2.get(n|string, {}).get(letter) == false %}selected{% endif %}>Sai</option>
+                                </select>
+                            </div>
+                        {% endfor %}
+                    </div>
                 </div>
-            </div>
-        {% endfor %}
+            {% endfor %}
+        {% endif %}
 
         {% if cfg.part3_count > 0 %}
             <h2 class="section-title">Phần III - Trả lời ngắn</h2>
@@ -3240,11 +4796,11 @@ TAKE_EXAM_HTML = BASE_CSS + """
 
 <div class="container">
     <div class="grid">
-        <div>
+        <div class="pdf-pane">
             <iframe class="pdf" src="/uploads/{{ exam.exam_file }}"></iframe>
         </div>
 
-        <div>
+        <div class="answer-pane">
             <form id="quizForm" class="card sheet-card" method="post" action="/exam/{{ exam.id }}/submit">
                 <div class="sheet-top">
                     <div>
@@ -3253,7 +4809,9 @@ TAKE_EXAM_HTML = BASE_CSS + """
                             {{ cfg.label }} - Thời gian làm bài {{ cfg.duration_minutes }} phút, không kể thời gian phát đề
                         </p>
                     </div>
-                    <div class="timer">Còn lại: <span id="timer"></span></div>
+                    <div class="sheet-top-actions">
+                        <div class="timer">Còn lại: <span id="timer"></span></div>
+                    </div>
                 </div>
 
                 <div class="answer-sheet">
@@ -3290,39 +4848,41 @@ TAKE_EXAM_HTML = BASE_CSS + """
                         </div>
                     </div>
 
-                    <div class="sheet-section">
-                        <div class="sheet-title">
-                            <span>PHẦN II</span>
-                            <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
-                        </div>
+                    {% if cfg.part2_count > 0 %}
+                        <div class="sheet-section">
+                            <div class="sheet-title">
+                                <span>PHẦN II</span>
+                                <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
+                            </div>
 
-                        <div class="tf-blocks">
-                            {% for n in part2_numbers %}
-                                <div class="tf-block">
-                                    <div class="tf-block-title">Câu {{ n }}</div>
-                                    <div class="tf-head">
-                                        <div></div>
-                                        <div>Đúng</div>
-                                        <div>Sai</div>
-                                    </div>
-
-                                    {% for letter in ['a', 'b', 'c', 'd'] %}
-                                        <div class="tf-line">
-                                            <div class="tf-letter">{{ letter }})</div>
-                                            <label class="tf-choice">
-                                                <input type="radio" name="p2_{{ n }}_{{ letter }}" value="true">
-                                                <span class="true" title="Câu {{ n }}{{ letter }} đúng"></span>
-                                            </label>
-                                            <label class="tf-choice">
-                                                <input type="radio" name="p2_{{ n }}_{{ letter }}" value="false">
-                                                <span class="false" title="Câu {{ n }}{{ letter }} sai"></span>
-                                            </label>
+                            <div class="tf-blocks">
+                                {% for n in part2_numbers %}
+                                    <div class="tf-block">
+                                        <div class="tf-block-title">Câu {{ n }}</div>
+                                        <div class="tf-head">
+                                            <div></div>
+                                            <div>Đúng</div>
+                                            <div>Sai</div>
                                         </div>
-                                    {% endfor %}
-                                </div>
-                            {% endfor %}
+
+                                        {% for letter in ['a', 'b', 'c', 'd'] %}
+                                            <div class="tf-line">
+                                                <div class="tf-letter">{{ letter }})</div>
+                                                <label class="tf-choice">
+                                                    <input type="radio" name="p2_{{ n }}_{{ letter }}" value="true">
+                                                    <span class="true" title="Câu {{ n }}{{ letter }} đúng"></span>
+                                                </label>
+                                                <label class="tf-choice">
+                                                    <input type="radio" name="p2_{{ n }}_{{ letter }}" value="false">
+                                                    <span class="false" title="Câu {{ n }}{{ letter }} sai"></span>
+                                                </label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
                         </div>
-                    </div>
+                    {% endif %}
 
                     {% if cfg.part3_count > 0 %}
                         <div class="sheet-section">
@@ -3337,7 +4897,7 @@ TAKE_EXAM_HTML = BASE_CSS + """
                                         <div class="short-title">Câu {{ n }}</div>
                                         <div class="short-input-row">
                                             <input class="short-input" name="p3_{{ n }}" placeholder="VD: 4,9 hoặc 0.08">
-                                            <button type="button" class="clear-short-btn" data-clear-short="p3_{{ n }}">Xóa</button>
+                                            <button type="button" class="clear-short-btn" data-clear-short="p3_{{ n }}" title="Xóa đáp án" aria-label="Xóa đáp án">×</button>
                                         </div>
 
                                         <div class="digit-omr" data-short-question="{{ n }}">
@@ -3631,23 +5191,27 @@ RESULT_HTML = BASE_CSS + """
 
 <div class="container">
     <div class="review-sheet-layout">
-        <div>
+        <div class="pdf-pane">
             <iframe class="review-pdf" src="/uploads/{{ exam.exam_file }}"></iframe>
         </div>
 
-        <div>
+        <div class="answer-pane">
             <div class="card review-panel">
                 <div class="review-headline">
                     <div>
                         <h1>{{ exam.title }}</h1>
                         <p class="muted" style="margin:0">{{ cfg.label }} - Đối chiếu với đề bên trái</p>
                     </div>
-                    <div class="review-score">{{ score_text }}/{{ max_score_text }}</div>
+                    <div class="result-head-side">
+                        <div class="review-score">{{ score_text }}/{{ max_score_text }}</div>
+                    </div>
                 </div>
 
                 <div class="mini-stats">
                     <span>TN <b>{{ summary.part1_correct }}/{{ summary.part1_total }}</b></span>
-                    <span>Đ/S <b>{{ summary.part2_point_text }}đ</b></span>
+                    {% if cfg.part2_count > 0 %}
+                        <span>Đ/S <b>{{ summary.part2_point_text }}đ</b></span>
+                    {% endif %}
                     {% if summary.part3_total > 0 %}
                         <span>TLN <b>{{ summary.part3_correct }}/{{ summary.part3_total }}</b></span>
                     {% endif %}
@@ -3696,47 +5260,49 @@ RESULT_HTML = BASE_CSS + """
                         </div>
                     </div>
 
-                    <div class="rs-section">
-                        <div class="rs-title">
-                            <span>PHẦN II</span>
-                            <span class="rs-note">Xám nền dòng: bỏ trống · Đỏ: chọn sai · Xanh: đáp án đúng</span>
-                        </div>
+                    {% if cfg.part2_count > 0 %}
+                        <div class="rs-section">
+                            <div class="rs-title">
+                                <span>PHẦN II</span>
+                                <span class="rs-note">Xám nền dòng: bỏ trống · Đỏ: chọn sai · Xanh: đáp án đúng</span>
+                            </div>
 
-                        <div class="rs-tf-blocks">
-                            {% for r in results.part2 %}
-                                <div class="rs-tf-block">
-                                    <div class="rs-tf-title">Câu {{ r.number }}</div>
-                                    <div class="rs-tf-head">
-                                        <div></div>
-                                        <div>Đúng</div>
-                                        <div>Sai</div>
-                                    </div>
-
-                                    {% for item in r['items'] %}
-                                        <div class="rs-tf-line {% if item.user is none %}unanswered{% endif %}">
-                                            <div class="rs-letter {% if item.user is none %}unanswered{% endif %}">{{ item.letter }})</div>
-
-                                            {% if item.right == true %}
-                                                <span class="rs-circle correct"></span>
-                                            {% elif item.user == true and item.user != item.right %}
-                                                <span class="rs-circle wrong"></span>
-                                            {% else %}
-                                                <span class="rs-circle empty"></span>
-                                            {% endif %}
-
-                                            {% if item.right == false %}
-                                                <span class="rs-circle correct"></span>
-                                            {% elif item.user == false and item.user != item.right %}
-                                                <span class="rs-circle wrong"></span>
-                                            {% else %}
-                                                <span class="rs-circle empty"></span>
-                                            {% endif %}
+                            <div class="rs-tf-blocks">
+                                {% for r in results.part2 %}
+                                    <div class="rs-tf-block">
+                                        <div class="rs-tf-title">Câu {{ r.number }}</div>
+                                        <div class="rs-tf-head">
+                                            <div></div>
+                                            <div>Đúng</div>
+                                            <div>Sai</div>
                                         </div>
-                                    {% endfor %}
-                                </div>
-                            {% endfor %}
+
+                                        {% for item in r['items'] %}
+                                            <div class="rs-tf-line {% if item.user is none %}unanswered{% endif %}">
+                                                <div class="rs-letter {% if item.user is none %}unanswered{% endif %}">{{ item.letter }})</div>
+
+                                                {% if item.right == true %}
+                                                    <span class="rs-circle correct"></span>
+                                                {% elif item.user == true and item.user != item.right %}
+                                                    <span class="rs-circle wrong"></span>
+                                                {% else %}
+                                                    <span class="rs-circle empty"></span>
+                                                {% endif %}
+
+                                                {% if item.right == false %}
+                                                    <span class="rs-circle correct"></span>
+                                                {% elif item.user == false and item.user != item.right %}
+                                                    <span class="rs-circle wrong"></span>
+                                                {% else %}
+                                                    <span class="rs-circle empty"></span>
+                                                {% endif %}
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            </div>
                         </div>
-                    </div>
+                    {% endif %}
 
                     {% if results.part3 %}
                         <div class="rs-section">
