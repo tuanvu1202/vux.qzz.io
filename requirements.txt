@@ -1,0 +1,6 @@
+flask
+gunicorn
+pymupdf
+pillow
+google-genai
+werkzeug
