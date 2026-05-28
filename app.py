@@ -41,8 +41,10 @@ from werkzeug.utils import secure_filename
 APP_SECRET = "doi-secret-nay-di"
 ADMIN_PASSWORD = "admin123"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-DB_PATH = os.path.join(BASE_DIR, "quiz.db")
+DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
+
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+DB_PATH = os.path.join(DATA_DIR, "quiz.db")
 
 # Có thể đổi model:
 #   setx GEMINI_MODEL "gemini-2.5-flash"
