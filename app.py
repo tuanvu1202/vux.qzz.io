@@ -97,6 +97,26 @@ SUBJECTS = {
         "part1_point": 10 / 60,
         "part3_point": 0,
     },
+    "geography": {
+        "label": "Địa",
+        "icon": "🌍",
+        "duration_minutes": 50,
+        "part1_count": 18,
+        "part2_count": 4,
+        "part3_count": 6,
+        "part1_point": 0.25,
+        "part3_point": 0.25,
+    },
+    "history": {
+        "label": "Sử",
+        "icon": "📜",
+        "duration_minutes": 50,
+        "part1_count": 24,
+        "part2_count": 4,
+        "part3_count": 0,
+        "part1_point": 0.25,
+        "part3_point": 0,
+    },
 }
 
 # Điểm đúng/sai: trong 1 câu đúng/sai có 4 ý.
@@ -5713,7 +5733,191 @@ BASE_CSS = """
         color: #f8fafc !important;
     }
 
+
+    /* ===== Mobile first-visit modal ===== */
+    .mobile-tip-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(15, 23, 42, .62);
+        backdrop-filter: blur(8px);
+    }
+
+    .mobile-tip-backdrop.show {
+        display: flex;
+    }
+
+    .mobile-tip-box {
+        width: min(420px, 100%);
+        border-radius: 22px;
+        background: white;
+        color: #111827;
+        padding: 22px;
+        box-shadow: 0 24px 80px rgba(0,0,0,.28);
+        border: 1px solid #e5e7eb;
+        animation: mobileTipIn .18s ease-out;
+    }
+
+    @keyframes mobileTipIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px) scale(.98);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
+    .mobile-tip-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: grid;
+        place-items: center;
+        background: #eff6ff;
+        color: #2563eb;
+        font-size: 25px;
+        margin-bottom: 12px;
+    }
+
+    .mobile-tip-box h2 {
+        margin: 0 0 8px;
+        font-size: 22px;
+        line-height: 1.2;
+    }
+
+    .mobile-tip-box p {
+        margin: 0;
+        color: #475569;
+        line-height: 1.55;
+        font-size: 15px;
+    }
+
+    .mobile-tip-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        margin-top: 16px;
+    }
+
+    .mobile-tip-actions button {
+        margin: 0;
+    }
+
+    .mobile-tip-secondary {
+        background: transparent !important;
+        color: #475569 !important;
+        border: 1px solid #d1d5db !important;
+    }
+
+    .mobile-tip-secondary:hover {
+        background: #f8fafc !important;
+    }
+
+    [data-theme="dark"] .mobile-tip-box {
+        background: #0f172a !important;
+        color: #f8fafc !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .mobile-tip-box p {
+        color: #cbd5e1 !important;
+    }
+
+    [data-theme="dark"] .mobile-tip-icon {
+        background: #1e293b !important;
+        color: #93c5fd !important;
+    }
+
+    [data-theme="dark"] .mobile-tip-secondary {
+        color: #cbd5e1 !important;
+        border-color: #475569 !important;
+    }
+
+    [data-theme="dark"] .mobile-tip-secondary:hover {
+        background: #111827 !important;
+    }
+
 </style>
+
+<div class="mobile-tip-backdrop" id="mobileTipModal" aria-hidden="true">
+    <div class="mobile-tip-box" role="dialog" aria-modal="true" aria-labelledby="mobileTipTitle">
+        <div class="mobile-tip-icon">💻</div>
+        <h2 id="mobileTipTitle">Nên dùng máy tính để làm bài</h2>
+        <p>
+            Web vẫn dùng được trên điện thoại, nhưng đề PDF và phiếu trả lời sẽ dễ thao tác hơn nhiều khi dùng laptop/máy tính,
+            đặc biệt với đề dài hoặc nhiều câu.
+        </p>
+        <div class="mobile-tip-actions">
+            <button type="button" id="mobileTipOk">Đã hiểu</button>
+            <button type="button" class="mobile-tip-secondary" id="mobileTipNever">Không nhắc lại</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const KEY = "mobileComputerTipSeen";
+
+        function isMobileDevice() {
+            const smallScreen = window.matchMedia("(max-width: 760px)").matches;
+            const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+            return smallScreen && coarsePointer;
+        }
+
+        function closeModal(save) {
+            const modal = document.getElementById("mobileTipModal");
+            if (!modal) return;
+            modal.classList.remove("show");
+            modal.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            if (save) {
+                localStorage.setItem(KEY, "1");
+            }
+        }
+
+        function showModal() {
+            if (!isMobileDevice()) return;
+            if (localStorage.getItem(KEY) === "1") return;
+
+            const modal = document.getElementById("mobileTipModal");
+            if (!modal) return;
+
+            modal.classList.add("show");
+            modal.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+
+            const okBtn = document.getElementById("mobileTipOk");
+            const neverBtn = document.getElementById("mobileTipNever");
+
+            if (okBtn) okBtn.addEventListener("click", function () {
+                closeModal(true);
+            });
+
+            if (neverBtn) neverBtn.addEventListener("click", function () {
+                closeModal(true);
+            });
+
+            modal.addEventListener("click", function (event) {
+                if (event.target === modal) {
+                    closeModal(true);
+                }
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", showModal);
+        } else {
+            showModal();
+        }
+    })();
+</script>
+
 
 <script>
     (function () {
