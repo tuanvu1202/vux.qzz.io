@@ -6288,6 +6288,28 @@ BASE_CSS = """
 
 <script>
     (function () {
+        function closePdfSidebarByDefault() {
+            const fragment = "#navpanes=0&pagemode=none&view=FitH";
+            document.querySelectorAll("iframe.pdf, iframe.review-pdf, iframe.result-pdf, iframe.result-compact-pdf").forEach(function (frame) {
+                const src = frame.getAttribute("src") || "";
+                if (!src || src.includes("navpanes=0") || src.includes("pagemode=none")) return;
+
+                const clean = src.split("#")[0];
+                frame.setAttribute("src", clean + fragment);
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", closePdfSidebarByDefault);
+        } else {
+            closePdfSidebarByDefault();
+        }
+    })();
+</script>
+
+
+<script>
+    (function () {
         function forceDoneCardGreen() {
             // Chỉ áp dụng ở trang chủ. Không áp dụng trong Admin/SuperAdmin.
             if (document.querySelector(".admin-page") || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin")) {
@@ -6376,10 +6398,12 @@ BASE_CSS = """
             if (!map || Object.keys(map).length === 0) return;
 
             document.querySelectorAll('a[href^="/exam/"]').forEach(link => {
-                const match = link.getAttribute("href").match(/\/exam\/(\d+)/);
-                if (!match) return;
+                const href = link.getAttribute("href") || "";
+                const parts = href.split("/exam/");
+                if (parts.length < 2) return;
 
-                const examId = match[1];
+                const examId = (parts[1] || "").split(/[?#]/)[0];
+                if (!examId) return;
                 const done = map[examId];
                 if (!done) return;
 
@@ -7172,7 +7196,7 @@ TAKE_EXAM_HTML = BASE_CSS + """
 <div class="container">
     <div class="grid">
         <div class="pdf-pane">
-            <iframe class="pdf" src="/uploads/{{ exam.exam_file }}"></iframe>
+            <iframe class="pdf" src="/uploads/{{ exam.exam_file }}#navpanes=0&pagemode=none&view=FitH"></iframe>
         </div>
 
         <div class="answer-pane">
@@ -7568,7 +7592,7 @@ RESULT_HTML = BASE_CSS + """
 <div class="container" data-result-exam-id="{{ exam.id }}" data-result-title="{{ exam.title }}" data-result-score="{{ score_text }}" data-result-max-score="{{ max_score_text }}">
     <div class="review-sheet-layout">
         <div class="pdf-pane">
-            <iframe class="review-pdf" src="/uploads/{{ exam.exam_file }}"></iframe>
+            <iframe class="review-pdf" src="/uploads/{{ exam.exam_file }}#navpanes=0&pagemode=none&view=FitH"></iframe>
         </div>
 
         <div class="answer-pane">
