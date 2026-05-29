@@ -155,6 +155,19 @@ def init_db():
         """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_visitors (
+            visitor_id TEXT PRIMARY KEY,
+            first_seen TEXT NOT NULL,
+            last_seen TEXT NOT NULL,
+            visit_count INTEGER NOT NULL DEFAULT 1,
+            ip_address TEXT,
+            user_agent TEXT
+        )
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -603,6 +616,44 @@ def require_superadmin():
         abort(403)
 
 
+def log_site_visit():
+    """
+    Ghi nhận visitor ghé trang chủ.
+    Không cần đăng nhập. Dựa theo visitor_id trong session/cookie.
+    """
+    visitor_id = get_or_create_visitor_id()
+    now = datetime.now().isoformat(timespec="seconds")
+    ip = get_client_ip()
+    ua = request.headers.get("User-Agent", "")[:500]
+
+    conn = db()
+    exists = conn.execute(
+        "SELECT visitor_id FROM site_visitors WHERE visitor_id=?",
+        (visitor_id,),
+    ).fetchone()
+
+    if exists:
+        conn.execute(
+            """
+            UPDATE site_visitors
+            SET last_seen=?, visit_count=visit_count+1, ip_address=?, user_agent=?
+            WHERE visitor_id=?
+            """,
+            (now, ip, ua, visitor_id),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO site_visitors (visitor_id, first_seen, last_seen, visit_count, ip_address, user_agent)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (visitor_id, now, now, 1, ip, ua),
+        )
+
+    conn.commit()
+    conn.close()
+
+
 def log_submission(exam, subject: str, score: float, max_score: float, summary: dict):
     started_at = request.form.get("started_at", "").strip()
     duration_seconds = None
@@ -679,6 +730,7 @@ def home():
     selected_subject = (request.args.get("subject") or "all").strip().lower()
 
     visitor_id = get_or_create_visitor_id()
+    log_site_visit()
 
     conn = db()
     if selected_subject in SUBJECTS:
@@ -701,9 +753,11 @@ def home():
         """,
         (visitor_id,),
     ).fetchall()
-    conn.close()
-
     done_map = {int(row["exam_id"]): row for row in done_rows if row["exam_id"] is not None}
+
+    visitor_count = conn.execute("SELECT COUNT(*) AS c FROM site_visitors").fetchone()["c"]
+    submit_count = conn.execute("SELECT COUNT(*) AS c FROM submission_logs").fetchone()["c"]
+    conn.close()
 
     return render_template_string(
         HOME_HTML,
@@ -711,6 +765,8 @@ def home():
         subjects=SUBJECTS,
         selected_subject=selected_subject,
         done_map=done_map,
+        visitor_count=visitor_count,
+        submit_count=submit_count,
         format_datetime_display=format_datetime_display,
         format_score=format_score,
     )
@@ -5620,6 +5676,43 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Visitor count trang chủ ===== */
+    .home-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .home-stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        color: #334155;
+        font-weight: 850;
+        font-size: 14px;
+    }
+
+    .home-stat-pill b {
+        color: #111827;
+        font-size: 15px;
+    }
+
+    [data-theme="dark"] .home-stat-pill {
+        background: #111827 !important;
+        border-color: #334155 !important;
+        color: #cbd5e1 !important;
+    }
+
+    [data-theme="dark"] .home-stat-pill b {
+        color: #f8fafc !important;
+    }
+
 </style>
 
 <script>
@@ -5949,6 +6042,11 @@ HOME_HTML = BASE_CSS + """
         <div>
             <h1>Danh sách bài thi</h1>
             <p class="muted">Chọn một đề để đọc PDF và làm quiz.</p>
+        <div class="home-stats">
+            <span class="home-stat-pill">👥 Visitor: <b>{{ visitor_count }}</b></span>
+            <span class="home-stat-pill">📝 Lượt nộp: <b>{{ submit_count }}</b></span>
+        </div>
+
         </div>
 
         <div class="filters">
