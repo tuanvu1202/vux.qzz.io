@@ -920,6 +920,48 @@ def admin_upload():
     return redirect(url_for("admin_edit_answers", exam_id=exam_id))
 
 
+@app.route("/admin/replace-exam-file/<int:exam_id>", methods=["POST"])
+def admin_replace_exam_file(exam_id):
+    require_admin()
+
+    new_exam_file = request.files.get("new_exam_file")
+    if not new_exam_file or not new_exam_file.filename:
+        return "Chưa chọn file đề mới", 400
+
+    exam_ext = Path(new_exam_file.filename).suffix.lower()
+    if exam_ext not in ALLOWED_EXAM_EXT:
+        return "File đề mới phải là PDF", 400
+
+    conn = db()
+    exam = conn.execute("SELECT * FROM exams WHERE id=?", (exam_id,)).fetchone()
+    if not exam:
+        conn.close()
+        abort(404)
+
+    saved_exam = secure_save_upload(new_exam_file, "exam")
+    remove_answer_page = request.form.get("remove_answer_page") == "1"
+
+    if remove_answer_page:
+        try:
+            saved_exam = remove_last_pdf_pages(saved_exam, pages_to_remove=1)
+        except Exception as e:
+            conn.close()
+            return f"Xóa trang đáp án cuối PDF thất bại: {e}", 500
+
+    old_exam_file = exam["exam_file"]
+
+    conn.execute("UPDATE exams SET exam_file=? WHERE id=?", (saved_exam, exam_id))
+    conn.commit()
+    conn.close()
+
+    try:
+        os.remove(os.path.join(UPLOAD_DIR, old_exam_file))
+    except OSError:
+        pass
+
+    return redirect(url_for("admin_edit_answers", exam_id=exam_id))
+
+
 @app.route("/admin/edit/<int:exam_id>", methods=["GET", "POST"])
 def admin_edit_answers(exam_id):
     require_admin()
@@ -972,6 +1014,7 @@ def admin_edit_answers(exam_id):
         exam=exam,
         cfg=cfg,
         data=data,
+        gemini_raw_json=data.get("gemini_debug", {}).get("raw_json", ""),
         part1_numbers=range(1, cfg["part1_count"] + 1),
         part2_numbers=range(1, cfg["part2_count"] + 1),
         part3_numbers=range(1, cfg["part3_count"] + 1),
@@ -5261,6 +5304,181 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Admin edit gọn hơn ===== */
+    .admin-edit-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+
+    .admin-tools-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 14px;
+        align-items: stretch;
+    }
+
+    .compact-admin-card {
+        padding: 16px !important;
+    }
+
+    .compact-admin-card h2,
+    .compact-admin-card h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+
+    .replace-file-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+    }
+
+    .replace-file-row input,
+    .replace-file-row button {
+        margin-bottom: 0;
+    }
+
+    .admin-answer-section {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 14px;
+        background: #f8fafc;
+    }
+
+    .admin-answer-section h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+    }
+
+    .admin-answer-grid.compact {
+        grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+        gap: 8px;
+    }
+
+    .admin-answer-grid.compact .mini {
+        padding: 8px;
+        border-radius: 10px;
+    }
+
+    .admin-answer-grid.compact .mini b {
+        font-size: 13px;
+    }
+
+    .admin-answer-grid.compact select,
+    .admin-answer-grid.compact input {
+        padding: 8px 9px;
+        margin: 6px 0 0;
+        font-size: 14px;
+        border-radius: 9px;
+    }
+
+    .admin-tf-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 8px;
+    }
+
+    .admin-tf-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 9px;
+        background: white;
+    }
+
+    .admin-tf-card b {
+        display: block;
+        margin-bottom: 7px;
+    }
+
+    .admin-tf-row {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 6px;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+
+    .admin-tf-row span {
+        font-weight: 800;
+        text-align: center;
+    }
+
+    .admin-tf-row select {
+        margin: 0;
+        padding: 7px 8px;
+        font-size: 13px;
+        border-radius: 8px;
+    }
+
+    details.gemini-details {
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: #f8fafc;
+        overflow: hidden;
+    }
+
+    details.gemini-details summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 13px 14px;
+        font-weight: 850;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+    }
+
+    details.gemini-details summary::-webkit-details-marker {
+        display: none;
+    }
+
+    details.gemini-details summary::after {
+        content: "Mở";
+        font-size: 13px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #e0ecff;
+        color: #1d4ed8;
+    }
+
+    details.gemini-details[open] summary::after {
+        content: "Đóng";
+    }
+
+    details.gemini-details pre {
+        margin: 0;
+        border-radius: 0;
+        max-height: 360px;
+    }
+
+    [data-theme="dark"] .admin-answer-section,
+    [data-theme="dark"] details.gemini-details {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .admin-tf-card,
+    [data-theme="dark"] .admin-answer-grid.compact .mini {
+        background: #111827 !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] details.gemini-details summary::after {
+        background: #1e293b;
+        color: #bfdbfe;
+    }
+
+    @media (max-width: 860px) {
+        .admin-tools-grid,
+        .replace-file-row {
+            grid-template-columns: 1fr;
+        }
+    }
+
 </style>
 
 <script>
@@ -5732,70 +5950,109 @@ EDIT_ANSWERS_HTML = BASE_CSS + """
 <div class="nav">
     <b>Sửa đáp án</b>
     <div>
-        <a href="/admin">Admin</a>
-        <a href="/exam/{{ exam.id }}">Xem quiz</a>
+        <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+        <a href="{{ url_for('home') }}">Trang chủ</a>
     </div>
 </div>
 
 <div class="container">
-    <form method="post" class="card">
-        <h1>{{ exam.title }}</h1>
-        <p class="muted">Môn: {{ cfg.label }}. Gemini đã tự đọc đáp án; nếu sai thì sửa nhanh rồi lưu.</p>
-
-        <h2 class="section-title">Phần I - Trắc nghiệm</h2>
-        <div class="admin-answer-grid">
-            {% for n in part1_numbers %}
-                <div class="mini">
-                    <b>Câu {{ n }}</b>
-                    <select name="p1_{{ n }}">
-                        <option value="">--</option>
-                        {% for c in ['A', 'B', 'C', 'D'] %}
-                            <option value="{{ c }}" {% if data.answers.part1.get(n|string) == c %}selected{% endif %}>{{ c }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            {% endfor %}
+    <div class="admin-edit-layout">
+        <div class="card compact-admin-card">
+            <h1>{{ exam.title }}</h1>
+            <p class="muted" style="margin-bottom:0">
+                Môn: {{ cfg.label }} · Nếu Gemini đọc sai thì sửa nhanh bên dưới rồi lưu.
+            </p>
         </div>
 
-        {% if cfg.part2_count > 0 %}
-            <h2 class="section-title">Phần II - Đúng/Sai</h2>
-            {% for n in part2_numbers %}
-                <div class="question">
-                    <h3>Câu {{ n }}</h3>
-                    <div class="admin-answer-grid">
-                        {% for letter in ['a', 'b', 'c', 'd'] %}
-                            <div class="mini">
-                                <b>{{ letter }})</b>
-                                <select name="p2_{{ n }}_{{ letter }}">
-                                    <option value="">--</option>
-                                    <option value="true" {% if data.answers.part2.get(n|string, {}).get(letter) == true %}selected{% endif %}>Đúng</option>
-                                    <option value="false" {% if data.answers.part2.get(n|string, {}).get(letter) == false %}selected{% endif %}>Sai</option>
-                                </select>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endfor %}
-        {% endif %}
+        <div class="admin-tools-grid">
+            <div class="card compact-admin-card">
+                <h2>Thay file đề PDF</h2>
+                <p class="muted">Dùng khi file đề bị mờ/sai. Chỉ thay PDF đề, không đổi đáp án đã đọc.</p>
 
-        {% if cfg.part3_count > 0 %}
-            <h2 class="section-title">Phần III - Trả lời ngắn</h2>
-            <div class="admin-answer-grid">
-                {% for n in part3_numbers %}
-                    <div class="mini">
-                        <b>Câu {{ n }}</b>
-                        <input name="p3_{{ n }}" value="{{ data.answers.part3.get(n|string, '') }}">
+                <form method="post" enctype="multipart/form-data" action="{{ url_for('admin_replace_exam_file', exam_id=exam.id) }}">
+                    <div class="replace-file-row">
+                        <div>
+                            <label>File đề mới (.pdf)</label>
+                            <input type="file" name="new_exam_file" accept="application/pdf" required>
+                        </div>
+                        <button type="submit">Thay đề</button>
                     </div>
-                {% endfor %}
+
+                    <label class="option" style="margin-top:10px">
+                        <input type="checkbox" name="remove_answer_page" value="1" style="width:auto; margin-right:8px">
+                        Xóa trang đáp án cuối nếu file đề mới có đáp án ở cuối
+                    </label>
+                </form>
             </div>
-        {% endif %}
 
-        <button style="margin-top:24px">Lưu đáp án</button>
-    </form>
+            <div class="card compact-admin-card">
+                <h2>JSON Gemini</h2>
+                <p class="muted">Thu gọn để đỡ rối. Bấm mở khi cần debug.</p>
 
-    <div class="card">
-        <h2>JSON Gemini trả về</h2>
-        <pre>{{ data.gemini_debug.raw_json }}</pre>
+                <details class="gemini-details">
+                    <summary>Xem JSON Gemini trả về</summary>
+                    <pre>{{ gemini_raw_json or data|tojson(indent=2) }}</pre>
+                </details>
+            </div>
+        </div>
+
+        <form method="post" class="card compact-admin-card">
+            <div class="admin-answer-section">
+                <h2>Phần I - Trắc nghiệm</h2>
+                <div class="admin-answer-grid compact">
+                    {% for n in part1_numbers %}
+                        <div class="mini">
+                            <b>Câu {{ n }}</b>
+                            <select name="p1_{{ n }}">
+                                <option value="">?</option>
+                                {% for opt in ["A","B","C","D"] %}
+                                    <option value="{{ opt }}" {% if data.answers.part1[n|string] == opt %}selected{% endif %}>{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if cfg.part2_count > 0 %}
+            <div class="admin-answer-section">
+                <h2>Phần II - Đúng / Sai</h2>
+                <div class="admin-tf-grid">
+                    {% for n in part2_numbers %}
+                        <div class="admin-tf-card">
+                            <b>Câu {{ n }}</b>
+                            {% for letter in ["a","b","c","d"] %}
+                                <div class="admin-tf-row">
+                                    <span>{{ letter }})</span>
+                                    <select name="p2_{{ n }}_{{ letter }}">
+                                        <option value="" {% if data.answers.part2[n|string][letter] is none %}selected{% endif %}>?</option>
+                                        <option value="true" {% if data.answers.part2[n|string][letter] is sameas true %}selected{% endif %}>Đúng</option>
+                                        <option value="false" {% if data.answers.part2[n|string][letter] is sameas false %}selected{% endif %}>Sai</option>
+                                    </select>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if cfg.part3_count > 0 %}
+            <div class="admin-answer-section">
+                <h2>Phần III - Trả lời ngắn</h2>
+                <div class="admin-answer-grid compact">
+                    {% for n in part3_numbers %}
+                        <div class="mini">
+                            <b>Câu {{ n }}</b>
+                            <input name="p3_{{ n }}" value="{{ data.answers.part3[n|string] }}">
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <button type="submit">Lưu đáp án</button>
+        </form>
     </div>
 </div>
 """
