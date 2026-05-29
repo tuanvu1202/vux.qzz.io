@@ -1385,7 +1385,7 @@ def leaderboard():
         FROM submission_logs
         {where_sql}
         ORDER BY score DESC, duration_seconds ASC, submitted_at ASC
-        LIMIT 100
+        LIMIT 10
         """,
         params,
     ).fetchall()
@@ -7228,7 +7228,7 @@ LEADERBOARD_HTML = BASE_CSS + """
 <div class="container">
     <div class="leaderboard-hero">
         <div>
-            <h1>🏆 Bảng xếp hạng</h1>
+            <h1>🏆 Bảng xếp hạng Top 10</h1>
             <p class="muted" style="margin:0">Không cần đăng nhập. Sau khi nộp bài, bạn có thể nhập tên để khoe điểm trên BXH.</p>
         </div>
 
@@ -7302,7 +7302,7 @@ LEADERBOARD_HTML = BASE_CSS + """
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="7" class="muted">Chưa có lượt nộp nào để xếp hạng.</td>
+                        <td colspan="7" class="muted">Chưa có lượt nộp nào để xếp hạng Top 10.</td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -7310,7 +7310,7 @@ LEADERBOARD_HTML = BASE_CSS + """
     </div>
 
     <p class="leaderboard-note">
-        BXH xếp theo điểm cao trước, nếu bằng điểm thì thời gian làm bài ngắn hơn xếp trên.
+        BXH chỉ hiển thị Top 10. Xếp theo điểm cao trước, nếu bằng điểm thì thời gian làm bài ngắn hơn xếp trên.
     </p>
 </div>
 """
