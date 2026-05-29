@@ -786,7 +786,7 @@ def home():
                 GROUP BY exam_id
             ) s ON s.exam_id = e.id
             WHERE e.subject=?
-            ORDER BY COALESCE(s.submit_count, 0) DESC, e.display_order DESC, e.id DESC
+            ORDER BY e.display_order DESC, COALESCE(s.submit_count, 0) DESC, e.id DESC
             """,
             (selected_subject,)
         ).fetchall()
@@ -803,7 +803,7 @@ def home():
                 FROM submission_logs
                 GROUP BY exam_id
             ) s ON s.exam_id = e.id
-            ORDER BY COALESCE(s.submit_count, 0) DESC, e.display_order DESC, e.id DESC
+            ORDER BY e.display_order DESC, COALESCE(s.submit_count, 0) DESC, e.id DESC
             """
         ).fetchall()
 
@@ -6225,6 +6225,65 @@ BASE_CSS = """
         display: none !important;
     }
 
+
+    /* ===== Home card: kéo badge "Đã làm" lại gần tên đề ===== */
+    .exam-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .exam-row-main {
+        min-width: 0;
+        flex: 0 1 auto;
+        max-width: 100%;
+    }
+
+    .exam-row-main h2 {
+        margin: 0;
+    }
+
+    .exam-row-badges {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    @media (max-width: 900px) {
+        .exam-row-head {
+            align-items: flex-start;
+        }
+
+        .exam-row-badges {
+            width: 100%;
+        }
+    }
+
+
+    /* ===== Admin order hint ===== */
+    .order-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding: 6px 9px;
+        border-radius: 999px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        color: #1d4ed8;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    [data-theme="dark"] .order-hint {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #93c5fd !important;
+    }
+
 </style>
 
 <script>
@@ -6813,7 +6872,7 @@ HOME_HTML = BASE_CSS + """
                             <div class="exam-row-main">
                                 <h2>{{ exam.title }}</h2>
                             </div>
-                            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                            <div class="exam-row-badges">
                                 {% if exam.submit_count and exam.submit_count == best_seller_count and best_seller_count > 0 %}
                                     <div class="best-seller-badge">🔥 BEST SELLER</div>
                                 {% endif %}
@@ -6932,6 +6991,7 @@ ADMIN_HTML = BASE_CSS + """
                 ·
                 <a href="/admin/edit/{{ exam.id }}">Sửa đáp án</a>
 
+                    <div class="order-hint">↕ Thứ tự này áp dụng ngoài trang chủ</div>
                     <div class="order-actions">
                         <form method="post" action="{{ url_for('admin_exam_order', exam_id=exam.id, action='top') }}">
                             <button type="submit">Đưa lên đầu</button>
