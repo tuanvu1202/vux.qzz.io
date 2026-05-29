@@ -5843,7 +5843,183 @@ BASE_CSS = """
         background: #111827 !important;
     }
 
+
+    /* ===== Local done marker fallback ===== */
+    .local-done-badge {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+        margin-left: 8px;
+    }
+
+    .local-done-meta {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+
+    .local-done-meta span {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    [data-theme="dark"] .local-done-badge {
+        background: #052e16 !important;
+        color: #86efac !important;
+        border-color: #16a34a !important;
+    }
+
+    [data-theme="dark"] .local-done-meta span {
+        background: #052e16 !important;
+        color: #bbf7d0 !important;
+        border-color: #166534 !important;
+    }
+
 </style>
+
+<script>
+    (function () {
+        const DONE_KEY = "quizDoneByExamV1";
+
+        function readDoneMap() {
+            try {
+                return JSON.parse(localStorage.getItem(DONE_KEY) || "{}") || {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function writeDoneMap(map) {
+            try {
+                localStorage.setItem(DONE_KEY, JSON.stringify(map));
+            } catch (e) {}
+        }
+
+        function formatDateTime(value) {
+            if (!value) return "";
+            return String(value).replace("T", " ").slice(0, 19);
+        }
+
+        function saveCurrentResult() {
+            const resultRoot = document.querySelector("[data-result-exam-id]");
+            if (!resultRoot) return;
+
+            const examId = resultRoot.getAttribute("data-result-exam-id");
+            if (!examId) return;
+
+            const title = resultRoot.getAttribute("data-result-title") || "";
+            const score = resultRoot.getAttribute("data-result-score") || "";
+            const maxScore = resultRoot.getAttribute("data-result-max-score") || "";
+            const now = new Date().toISOString().slice(0, 19);
+
+            const map = readDoneMap();
+            const old = map[examId] || {};
+            const oldBest = parseFloat(String(old.bestScore || "").replace(",", "."));
+            const newScore = parseFloat(String(score || "").replace(",", "."));
+
+            let bestScore = score;
+            let bestMaxScore = maxScore;
+            if (!Number.isNaN(oldBest) && !Number.isNaN(newScore) && oldBest > newScore) {
+                bestScore = old.bestScore;
+                bestMaxScore = old.maxScore || maxScore;
+            }
+
+            map[examId] = {
+                title: title,
+                bestScore: bestScore,
+                maxScore: bestMaxScore,
+                lastDoneAt: now,
+                attemptCount: Number(old.attemptCount || 0) + 1
+            };
+            writeDoneMap(map);
+        }
+
+        function markHomeCards() {
+            const map = readDoneMap();
+            if (!map || Object.keys(map).length === 0) return;
+
+            document.querySelectorAll('a[href^="/exam/"]').forEach(link => {
+                const match = link.getAttribute("href").match(/\/exam\/(\d+)/);
+                if (!match) return;
+
+                const examId = match[1];
+                const done = map[examId];
+                if (!done) return;
+
+                const card = link.closest(".card");
+                if (!card) return;
+
+                card.classList.add("exam-card-done");
+
+                if (!card.querySelector(".done-badge, .local-done-badge")) {
+                    const badge = document.createElement("span");
+                    badge.className = "local-done-badge";
+                    badge.textContent = "✓ Đã làm";
+
+                    const title = card.querySelector("h2, h3");
+                    if (title) {
+                        title.insertAdjacentElement("afterend", badge);
+                    } else {
+                        card.insertAdjacentElement("afterbegin", badge);
+                    }
+                }
+
+                if (!card.querySelector(".done-meta, .local-done-meta")) {
+                    const meta = document.createElement("div");
+                    meta.className = "local-done-meta";
+
+                    const score = document.createElement("span");
+                    score.textContent = "Điểm cao nhất: " + (done.bestScore || "?") + "/" + (done.maxScore || "?");
+
+                    const time = document.createElement("span");
+                    time.textContent = "Lần gần nhất: " + formatDateTime(done.lastDoneAt);
+
+                    const attempts = document.createElement("span");
+                    attempts.textContent = "Số lần: " + (done.attemptCount || 1);
+
+                    meta.appendChild(score);
+                    meta.appendChild(time);
+                    meta.appendChild(attempts);
+
+                    const title = card.querySelector("h2, h3");
+                    if (title) {
+                        title.insertAdjacentElement("afterend", meta);
+                    } else {
+                        card.appendChild(meta);
+                    }
+                }
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", function () {
+                saveCurrentResult();
+                markHomeCards();
+            });
+        } else {
+            saveCurrentResult();
+            markHomeCards();
+        }
+    })();
+</script>
+
 
 <div class="mobile-tip-backdrop" id="mobileTipModal" aria-hidden="true">
     <div class="mobile-tip-box" role="dialog" aria-modal="true" aria-labelledby="mobileTipTitle">
@@ -6947,7 +7123,7 @@ RESULT_HTML = BASE_CSS + """
     <a href="/">Trang chủ</a>
 </div>
 
-<div class="container">
+<div class="container" data-result-exam-id="{{ exam.id }}" data-result-title="{{ exam.title }}" data-result-score="{{ score_text }}" data-result-max-score="{{ max_score_text }}">
     <div class="review-sheet-layout">
         <div class="pdf-pane">
             <iframe class="review-pdf" src="/uploads/{{ exam.exam_file }}"></iframe>
