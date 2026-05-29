@@ -6728,6 +6728,13 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Ẩn badge Đã làm, giữ nền xanh và thông tin điểm ===== */
+    .done-badge,
+    .local-done-badge {
+        display: none !important;
+    }
+
 </style>
 
 <script>
@@ -6791,8 +6798,8 @@ BASE_CSS = """
                 return;
             }
 
-            document.querySelectorAll(".done-badge, .local-done-badge").forEach(function (badge) {
-                const card = badge.closest(".card");
+            document.querySelectorAll(".done-meta, .local-done-meta").forEach(function (meta) {
+                const card = meta.closest(".card");
                 if (card) {
                     card.classList.add("exam-card-done");
                 }
@@ -6886,19 +6893,6 @@ BASE_CSS = """
                 if (!card) return;
 
                 card.classList.add("exam-card-done");
-
-                if (!card.querySelector(".done-badge, .local-done-badge")) {
-                    const badge = document.createElement("span");
-                    badge.className = "local-done-badge";
-                    badge.textContent = "✓ Đã làm";
-
-                    const title = card.querySelector("h2, h3");
-                    if (title) {
-                        title.insertAdjacentElement("afterend", badge);
-                    } else {
-                        card.insertAdjacentElement("afterbegin", badge);
-                    }
-                }
 
                 if (!card.querySelector(".done-meta, .local-done-meta")) {
                     const meta = document.createElement("div");
@@ -7474,9 +7468,6 @@ HOME_HTML = BASE_CSS + """
                             <div class="exam-row-badges">
                                 {% if exam.submit_count and exam.submit_count == best_seller_count and best_seller_count > 0 %}
                                     <div class="best-seller-badge">🔥 BEST SELLER</div>
-                                {% endif %}
-                                {% if done %}
-                                    <div class="done-badge">✓ Đã làm</div>
                                 {% endif %}
                             </div>
                         </div>
