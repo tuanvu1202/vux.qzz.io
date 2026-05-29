@@ -6200,11 +6200,41 @@ BASE_CSS = """
             linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
     }
 
+
+    /* ===== Fix Admin: không áp dụng nền "Đã làm" trong trang admin ===== */
+    .admin-page .card.exam-card-done,
+    .admin-page .card.best-seller-card,
+    .admin-page .card.exam-card-done.best-seller-card {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="light"] .admin-page .card.exam-card-done,
+    [data-theme="light"] .admin-page .card.best-seller-card,
+    [data-theme="light"] .admin-page .card.exam-card-done.best-seller-card {
+        background: #ffffff !important;
+        border-color: #e5e7eb !important;
+    }
+
+    .admin-page .done-badge,
+    .admin-page .done-meta,
+    .admin-page .local-done-badge,
+    .admin-page .local-done-meta,
+    .admin-page .best-seller-badge,
+    .admin-page .exam-popularity {
+        display: none !important;
+    }
+
 </style>
 
 <script>
     (function () {
         function forceDoneCardGreen() {
+            // Chỉ áp dụng ở trang chủ. Không áp dụng trong Admin/SuperAdmin.
+            if (document.querySelector(".admin-page") || location.pathname.startsWith("/admin") || location.pathname.startsWith("/superadmin")) {
+                return;
+            }
+
             document.querySelectorAll(".done-badge, .local-done-badge").forEach(function (badge) {
                 const card = badge.closest(".card");
                 if (card) {
@@ -6280,6 +6310,9 @@ BASE_CSS = """
         }
 
         function markHomeCards() {
+            // Chỉ đánh dấu đề đã làm ở trang chủ, không đụng vào giao diện Admin.
+            if (location.pathname !== "/") return;
+
             const map = readDoneMap();
             if (!map || Object.keys(map).length === 0) return;
 
@@ -6621,7 +6654,7 @@ SUPERADMIN_HTML = BASE_CSS + """
     </div>
 </div>
 
-<div class="container">
+<div class="container admin-page">
     <div class="super-stats">
         <div class="super-stat">
             <span>Tổng lượt nộp</span>
