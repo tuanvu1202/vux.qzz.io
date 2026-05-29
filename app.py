@@ -5185,6 +5185,82 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Tinh chỉnh header phiếu trả lời ===== */
+    .exam-sheet-top {
+        margin-bottom: 6px !important;
+        gap: 10px !important;
+        align-items: center !important;
+    }
+
+    .exam-sheet-top .sheet-title-row {
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
+
+    .exam-sheet-top h1 {
+        margin: 0 !important;
+        font-size: clamp(24px, 2vw, 30px) !important;
+        line-height: 1.12 !important;
+        font-weight: 850 !important;
+        letter-spacing: -0.01em;
+    }
+
+    .exam-sheet-info {
+        display: block !important;
+        margin: 0 0 10px 0 !important;
+        font-size: 15px !important;
+        line-height: 1.45 !important;
+        max-width: none !important;
+        white-space: normal !important;
+    }
+
+    .answer-sheet {
+        margin-top: 8px !important;
+    }
+
+    @media (max-width: 1180px) {
+        .exam-sheet-top {
+            align-items: flex-start !important;
+        }
+
+        .exam-sheet-top h1 {
+            font-size: 25px !important;
+        }
+
+        .exam-sheet-info {
+            margin-bottom: 8px !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .exam-sheet-top h1 {
+            font-size: 23px !important;
+        }
+
+        .exam-sheet-info {
+            font-size: 14px !important;
+            line-height: 1.4 !important;
+        }
+    }
+
+
+    /* ===== Giảm size chữ Phiếu trả lời lần 2 ===== */
+    .exam-sheet-top h1,
+    .sheet-top.exam-sheet-top h1 {
+        font-size: 24px !important;
+        line-height: 1.12 !important;
+        font-weight: 850 !important;
+        margin: 0 !important;
+    }
+
+    @media (max-width: 640px) {
+        .exam-sheet-top h1,
+        .sheet-top.exam-sheet-top h1 {
+            font-size: 22px !important;
+        }
+    }
+
 </style>
 
 <script>
@@ -5760,17 +5836,18 @@ TAKE_EXAM_HTML = BASE_CSS + """
 
         <div class="answer-pane">
             <form id="quizForm" class="card sheet-card" method="post" action="/exam/{{ exam.id }}/submit">
-                <div class="sheet-top">
-                    <div>
+                <div class="sheet-top exam-sheet-top">
+                    <div class="sheet-title-row">
                         <h1>Phiếu trả lời</h1>
-                        <p class="muted">
-                            {{ cfg.label }} - Thời gian làm bài {{ cfg.duration_minutes }} phút, không kể thời gian phát đề
-                        </p>
                     </div>
                     <div class="sheet-top-actions">
                         <div class="timer">Còn lại: <span id="timer"></span></div>
                     </div>
                 </div>
+
+                <p class="muted exam-sheet-info">
+                    {{ cfg.label }} - Thời gian làm bài {{ cfg.duration_minutes }} phút, không kể thời gian phát đề
+                </p>
 
                 <div class="answer-sheet">
                     <div class="sheet-section">
