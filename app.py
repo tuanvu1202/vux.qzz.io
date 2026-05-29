@@ -171,6 +171,7 @@ def init_db():
             ip_address TEXT,
             user_agent TEXT,
             visitor_id TEXT,
+            participant_name TEXT,
             submitted_at TEXT NOT NULL
         )
         """
@@ -229,6 +230,24 @@ def ensure_display_order_column():
             conn.commit()
     finally:
         conn.close()
+
+
+
+def ensure_participant_name_column():
+    conn = db()
+    try:
+        cols = conn.execute("PRAGMA table_info(submission_logs)").fetchall()
+        col_names = {c["name"] for c in cols}
+        if cols and "participant_name" not in col_names:
+            conn.execute("ALTER TABLE submission_logs ADD COLUMN participant_name TEXT")
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def clean_participant_name(value: str) -> str:
+    value = re.sub(r"\s+", " ", str(value or "")).strip()
+    return value[:40]
 
 
 def secure_save_upload(file_storage, prefix: str) -> str:
@@ -706,13 +725,13 @@ def log_submission(exam, subject: str, score: float, max_score: float, summary: 
             duration_seconds = None
 
     conn = db()
-    conn.execute(
+    cur = conn.execute(
         """
         INSERT INTO submission_logs (
             exam_id, exam_title, subject, score, max_score, wrong_total,
-            duration_seconds, ip_address, user_agent, visitor_id, submitted_at
+            duration_seconds, ip_address, user_agent, visitor_id, participant_name, submitted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             exam["id"],
@@ -725,11 +744,14 @@ def log_submission(exam, subject: str, score: float, max_score: float, summary: 
             get_client_ip(),
             request.headers.get("User-Agent", "")[:500],
             get_or_create_visitor_id(),
+            clean_participant_name(request.form.get("participant_name", "")),
             datetime.now().isoformat(timespec="seconds"),
         ),
     )
+    log_id = cur.lastrowid
     conn.commit()
     conn.close()
+    return log_id
 
 
 def format_duration(seconds) -> str:
@@ -950,7 +972,7 @@ def submit_exam(exam_id):
     summary = build_result_summary(results, score, max_score)
 
     # Log lượt làm bài, không cần người dùng đăng nhập/đăng kí.
-    log_submission(exam, subject, score, max_score, summary)
+    log_id = log_submission(exam, subject, score, max_score, summary)
 
     return render_template_string(
         RESULT_HTML,
@@ -962,6 +984,8 @@ def submit_exam(exam_id):
         score_text=format_score(score),
         max_score=max_score,
         max_score_text=format_score(max_score),
+        log_id=log_id,
+        participant_name=clean_participant_name(request.form.get("participant_name", "")),
     )
 
 
@@ -1294,6 +1318,93 @@ def admin_delete(exam_id):
 
     conn.close()
     return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/leaderboard/update-name/<int:log_id>", methods=["POST"])
+def update_leaderboard_name(log_id):
+    visitor_id = get_or_create_visitor_id()
+    new_name = clean_participant_name(request.form.get("participant_name", ""))
+
+    if not new_name:
+        return "Tên hiển thị không được để trống", 400
+
+    conn = db()
+    row = conn.execute(
+        "SELECT id, visitor_id FROM submission_logs WHERE id=?",
+        (log_id,),
+    ).fetchone()
+
+    if not row:
+        conn.close()
+        abort(404)
+
+    # Chỉ cho sửa tên của lượt nộp thuộc cùng trình duyệt/session.
+    if row["visitor_id"] and row["visitor_id"] != visitor_id:
+        conn.close()
+        abort(403)
+
+    conn.execute(
+        "UPDATE submission_logs SET participant_name=? WHERE id=?",
+        (new_name, log_id),
+    )
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("leaderboard"))
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    subject = (request.args.get("subject") or "all").strip().lower()
+    exam_id_raw = (request.args.get("exam_id") or "").strip()
+
+    where = ["score IS NOT NULL"]
+    params = []
+
+    if subject in SUBJECTS:
+        where.append("subject=?")
+        params.append(subject)
+    else:
+        subject = "all"
+
+    selected_exam_id = None
+    if exam_id_raw.isdigit():
+        selected_exam_id = int(exam_id_raw)
+        where.append("exam_id=?")
+        params.append(selected_exam_id)
+
+    where_sql = "WHERE " + " AND ".join(where)
+
+    conn = db()
+    rows = conn.execute(
+        f"""
+        SELECT
+            id, exam_id, exam_title, subject, score, max_score,
+            duration_seconds, visitor_id, participant_name, submitted_at
+        FROM submission_logs
+        {where_sql}
+        ORDER BY score DESC, duration_seconds ASC, submitted_at ASC
+        LIMIT 100
+        """,
+        params,
+    ).fetchall()
+
+    exams = conn.execute(
+        "SELECT id, title, subject FROM exams ORDER BY display_order DESC, id DESC"
+    ).fetchall()
+    conn.close()
+
+    return render_template_string(
+        LEADERBOARD_HTML,
+        rows=rows,
+        exams=exams,
+        subjects=SUBJECTS,
+        selected_subject=subject,
+        selected_exam_id=selected_exam_id,
+        format_score=format_score,
+        format_duration=format_duration,
+        format_datetime_display=format_datetime_display,
+    )
 
 
 @app.route("/superadmin/login", methods=["GET", "POST"])
@@ -6284,7 +6395,371 @@ BASE_CSS = """
         color: #93c5fd !important;
     }
 
+
+    /* ===== Leaderboard không cần đăng nhập ===== */
+    .leader-name-box {
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        border: 1px solid #334155;
+        background: rgba(15, 23, 42, .55);
+    }
+    .leader-name-box label {
+        display: block;
+        font-weight: 850;
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
+    .leader-name-box label span {
+        color: #94a3b8;
+        font-weight: 700;
+    }
+    .leader-name-box input {
+        margin: 0;
+        padding: 10px 11px;
+        border-radius: 10px;
+    }
+    .leaderboard-hero {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .leaderboard-hero h1 {
+        margin: 0 0 6px;
+        font-size: 34px;
+    }
+    .leaderboard-filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .leaderboard-table-wrap {
+        overflow: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: white;
+    }
+    .leaderboard-table {
+        width: 100%;
+        min-width: 900px;
+        border-collapse: collapse;
+    }
+    .leaderboard-table th,
+    .leaderboard-table td {
+        padding: 13px 14px;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .leaderboard-table th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .leaderboard-table tr:last-child td {
+        border-bottom: 0;
+    }
+    .rank-cell {
+        font-size: 22px;
+        font-weight: 950;
+        white-space: nowrap;
+    }
+    .leader-name {
+        font-weight: 900;
+        color: #111827;
+    }
+    .leader-exam {
+        max-width: 420px;
+        font-weight: 800;
+    }
+    .leader-score {
+        font-size: 18px;
+        font-weight: 950;
+        color: #2563eb;
+        white-space: nowrap;
+    }
+    .leader-small,
+    .leaderboard-note {
+        color: #64748b;
+        font-size: 13px;
+    }
+    [data-theme="dark"] .leader-name-box {
+        background: #0b1220 !important;
+        border-color: #334155 !important;
+    }
+    [data-theme="dark"] .leaderboard-table-wrap,
+    [data-theme="dark"] .leaderboard-table {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+        color: #e5e7eb !important;
+    }
+    [data-theme="dark"] .leaderboard-table th {
+        background: #111827 !important;
+        color: #cbd5e1 !important;
+        border-color: #334155 !important;
+    }
+    [data-theme="dark"] .leaderboard-table td {
+        border-color: #334155 !important;
+    }
+    [data-theme="dark"] .leader-name {
+        color: #f8fafc !important;
+    }
+    [data-theme="dark"] .leader-score {
+        color: #60a5fa !important;
+    }
+    [data-theme="dark"] .leader-small,
+    [data-theme="dark"] .leaderboard-note {
+        color: #94a3b8 !important;
+    }
+
+
+    /* ===== Đổi tên hiển thị sau khi đạt điểm ===== */
+    .claim-score-box {
+        margin: 12px 0;
+        padding: 12px;
+        border-radius: 16px;
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+    }
+
+    .claim-score-box h3 {
+        margin: 0 0 6px;
+        font-size: 17px;
+    }
+
+    .claim-score-box p {
+        margin: 0 0 10px;
+        color: #475569;
+        font-size: 14px;
+    }
+
+    .claim-score-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: end;
+    }
+
+    .claim-score-form input,
+    .claim-score-form button {
+        margin: 0;
+    }
+
+    .claim-score-form button {
+        white-space: nowrap;
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    [data-theme="dark"] .claim-score-box {
+        background: #0f172a !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .claim-score-box p {
+        color: #94a3b8 !important;
+    }
+
+    @media (max-width: 640px) {
+        .claim-score-form {
+            grid-template-columns: 1fr;
+        }
+    }
+
+
+    /* ===== Không hiện ô tên BXH trong lúc làm bài ===== */
+    #quizForm .leader-name-box {
+        display: none !important;
+    }
+
+
+    /* ===== Responsive điện thoại: phiếu trả lời gọn hơn ===== */
+    @media (max-width: 760px) {
+        .container:has(.grid),
+        .container:has(.review-sheet-layout) {
+            padding: 8px !important;
+            margin-top: 8px !important;
+        }
+
+        .grid,
+        .review-sheet-layout {
+            display: block !important;
+        }
+
+        .pdf-pane {
+            margin-bottom: 10px !important;
+        }
+
+        .pdf,
+        .review-pdf,
+        .result-pdf,
+        .result-compact-pdf {
+            position: static !important;
+            height: 62vh !important;
+            min-height: 420px !important;
+            border-radius: 12px !important;
+        }
+
+        .answer-pane {
+            min-width: 0 !important;
+            width: 100% !important;
+        }
+
+        .sheet-card,
+        .review-panel,
+        .result-panel {
+            padding: 12px !important;
+            border-radius: 14px !important;
+        }
+
+        .sheet-top,
+        .exam-sheet-top {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 8px !important;
+            flex-wrap: nowrap !important;
+            margin-bottom: 4px !important;
+            min-height: 0 !important;
+        }
+
+        .sheet-top > div:first-child,
+        .exam-sheet-top .sheet-title-row {
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+        }
+
+        .sheet-top h1,
+        .exam-sheet-top h1 {
+            font-size: 22px !important;
+            line-height: 1.1 !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        .sheet-top-actions {
+            flex: 0 0 auto !important;
+            width: auto !important;
+            display: flex !important;
+            justify-content: flex-end !important;
+            align-items: center !important;
+            margin: 0 !important;
+        }
+
+        .timer {
+            padding: 7px 10px !important;
+            font-size: 13px !important;
+            border-radius: 999px !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        .exam-sheet-info,
+        .sheet-top .muted {
+            margin: 4px 0 8px !important;
+            font-size: 13px !important;
+            line-height: 1.35 !important;
+            max-width: none !important;
+        }
+
+        .answer-sheet {
+            margin-top: 6px !important;
+        }
+
+        .sheet-title {
+            padding: 7px 8px !important;
+        }
+
+        .mc-columns,
+        .tf-blocks,
+        .short-columns {
+            grid-template-columns: 1fr !important;
+        }
+
+        .mc-col,
+        .tf-block,
+        .short-box {
+            border-right: 0 !important;
+        }
+
+        .mc-line,
+        .tf-line {
+            min-height: 25px !important;
+        }
+
+        .submit-bar {
+            bottom: 8px !important;
+            padding: 8px !important;
+            border-radius: 12px !important;
+        }
+
+        .submit-bar button {
+            height: 44px !important;
+            font-size: 15px !important;
+        }
+    }
+
+    @media (max-width: 420px) {
+        .sheet-top h1,
+        .exam-sheet-top h1 {
+            font-size: 20px !important;
+        }
+
+        .timer {
+            font-size: 12px !important;
+            padding: 6px 8px !important;
+        }
+
+        .exam-sheet-info,
+        .sheet-top .muted {
+            font-size: 12.5px !important;
+        }
+
+        .pdf,
+        .review-pdf,
+        .result-pdf,
+        .result-compact-pdf {
+            height: 58vh !important;
+            min-height: 360px !important;
+        }
+    }
+
 </style>
+
+<script>
+    (function () {
+        function initParticipantNameMemory() {
+            const input = document.getElementById("participantName");
+            if (!input) return;
+
+            const KEY = "quizParticipantName";
+            const saved = localStorage.getItem(KEY) || "";
+            if (saved && !input.value) input.value = saved;
+
+            input.addEventListener("input", function () {
+                localStorage.setItem(KEY, input.value.trim());
+            });
+
+            const form = input.closest("form");
+            if (form) {
+                form.addEventListener("submit", function () {
+                    localStorage.setItem(KEY, input.value.trim());
+                });
+            }
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initParticipantNameMemory);
+        } else {
+            initParticipantNameMemory();
+        }
+    })();
+</script>
+
 
 <script>
     (function () {
@@ -6701,6 +7176,105 @@ BASE_CSS = """
 """
 
 
+LEADERBOARD_HTML = BASE_CSS + """
+<div class="nav">
+    <b>🏆 Bảng xếp hạng</b>
+    <div>
+        <a href="{{ url_for('home') }}">Trang chủ</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="leaderboard-hero">
+        <div>
+            <h1>🏆 Bảng xếp hạng</h1>
+            <p class="muted" style="margin:0">Không cần đăng nhập. Sau khi nộp bài, bạn có thể nhập tên để khoe điểm trên BXH.</p>
+        </div>
+
+        <div class="leaderboard-filters">
+            <a class="filter-chip {% if selected_subject == 'all' %}active{% endif %}" href="{{ url_for('leaderboard') }}">Tất cả</a>
+            {% for key, sub in subjects.items() %}
+                <a class="filter-chip {% if selected_subject == key %}active{% endif %}" href="{{ url_for('leaderboard', subject=key) }}">{{ sub.label }}</a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <form method="get" class="super-filter">
+            <div>
+                <label>Môn</label>
+                <select name="subject">
+                    <option value="all" {% if selected_subject == "all" %}selected{% endif %}>Tất cả</option>
+                    {% for key, sub in subjects.items() %}
+                        <option value="{{ key }}" {% if selected_subject == key %}selected{% endif %}>{{ sub.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label>Chọn riêng một đề</label>
+                <select name="exam_id">
+                    <option value="">Tất cả đề</option>
+                    {% for exam in exams %}
+                        <option value="{{ exam.id }}" {% if selected_exam_id == exam.id %}selected{% endif %}>{{ exam.title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="super-filter-actions">
+                <button type="submit">Xem BXH</button>
+                <a class="link-btn" href="{{ url_for('leaderboard') }}">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="leaderboard-table-wrap">
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>Hạng</th>
+                    <th>Tên</th>
+                    <th>Điểm</th>
+                    <th>Đề</th>
+                    <th>Môn</th>
+                    <th>Thời gian làm</th>
+                    <th>Nộp lúc</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td class="rank-cell">
+                            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}#{{ loop.index }}{% endif %}
+                        </td>
+                        <td>
+                            <div class="leader-name">
+                                {{ row.participant_name or ("Ẩn danh " ~ (row.visitor_id or "")[-4:]) }}
+                            </div>
+                            <div class="leader-small">{{ row.visitor_id }}</div>
+                        </td>
+                        <td class="leader-score">{{ format_score(row.score) }}/{{ format_score(row.max_score) }}</td>
+                        <td class="leader-exam">{{ row.exam_title }}</td>
+                        <td>{{ subjects[row.subject].label if row.subject in subjects else row.subject }}</td>
+                        <td>{{ format_duration(row.duration_seconds) or "Không rõ" }}</td>
+                        <td>{{ format_datetime_display(row.submitted_at) }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="muted">Chưa có lượt nộp nào để xếp hạng.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="leaderboard-note">
+        BXH xếp theo điểm cao trước, nếu bằng điểm thì thời gian làm bài ngắn hơn xếp trên.
+    </p>
+</div>
+"""
+
+
 SUPERADMIN_LOGIN_HTML = BASE_CSS + """
 <div class="nav">
     <div><b>SuperAdmin</b></div>
@@ -6857,7 +7431,7 @@ SUPERADMIN_HTML = BASE_CSS + """
 
 HOME_HTML = BASE_CSS + """
 <div class="nav">
-    <b>Thi thử THPTQG</b>
+    <b>quép sai của Vũ</b>
     <div><a href="/admin/login">Admin</a></div>
 </div>
 
@@ -6867,6 +7441,7 @@ HOME_HTML = BASE_CSS + """
             <h1>Danh sách bài thi</h1>
             <p class="muted">Chọn một đề để đọc PDF và làm quiz.</p>
         <div class="home-stats">
+            <a class="home-stat-pill" href="{{ url_for('leaderboard') }}">🏆 Bảng xếp hạng</a>
             <span class="home-stat-pill">👥 Visitor: <b>{{ visitor_count }}</b></span>
             <span class="home-stat-pill">📝 Lượt nộp: <b>{{ submit_count }}</b></span>
         </div>
@@ -7590,6 +8165,16 @@ RESULT_HTML = BASE_CSS + """
 </div>
 
 <div class="container" data-result-exam-id="{{ exam.id }}" data-result-title="{{ exam.title }}" data-result-score="{{ score_text }}" data-result-max-score="{{ max_score_text }}">
+
+                <div class="claim-score-box">
+                    <h3>Muốn khoe điểm trên bảng xếp hạng?</h3>
+                    <p>Nhập tên/bí danh/lớp để hiện trên BXH. Bạn có thể để trống lúc làm bài rồi cập nhật ở đây.</p>
+                    <form class="claim-score-form" method="post" action="{{ url_for('update_leaderboard_name', log_id=log_id) }}">
+                        <input name="participant_name" maxlength="40" value="{{ participant_name }}" placeholder="Ví dụ: Tuấn Vũ, 12A1, biệt danh..." required>
+                        <button type="submit">Cập nhật tên</button>
+                    </form>
+                </div>
+
     <div class="review-sheet-layout">
         <div class="pdf-pane">
             <iframe class="review-pdf" src="/uploads/{{ exam.exam_file }}#navpanes=0&pagemode=none&view=FitH"></iframe>
@@ -7749,10 +8334,12 @@ RESULT_HTML = BASE_CSS + """
 migrate_old_db_if_needed()
 init_db()
 ensure_display_order_column()
+ensure_participant_name_column()
 
 
 if __name__ == "__main__":
     migrate_old_db_if_needed()
     init_db()
     ensure_display_order_column()
+    ensure_participant_name_column()
     app.run(debug=True)
