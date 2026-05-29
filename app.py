@@ -36,10 +36,12 @@ from flask import (
 from google import genai
 from google.genai import types
 from werkzeug.utils import secure_filename
+from PIL import Image, ImageEnhance, ImageFilter
 
 
 APP_SECRET = "doi-secret-nay-di"
 ADMIN_PASSWORD = "admin123"
+SUPERADMIN_PASSWORD = os.getenv("SUPERADMIN_PASSWORD", "superadmin123")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.getenv("DATA_DIR", os.path.join(BASE_DIR, "data"))
 
@@ -133,6 +135,26 @@ def init_db():
         )
         """
     )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS submission_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exam_id INTEGER,
+            exam_title TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            score REAL NOT NULL,
+            max_score REAL NOT NULL,
+            wrong_total INTEGER NOT NULL,
+            duration_seconds INTEGER,
+            ip_address TEXT,
+            user_agent TEXT,
+            visitor_id TEXT,
+            submitted_at TEXT NOT NULL
+        )
+        """
+    )
+
     conn.commit()
     conn.close()
 
@@ -202,6 +224,21 @@ def normalize_answer_value(value: str) -> str:
     return value
 
 
+def extract_first_number(value: str):
+    """
+    Lấy số đầu tiên trong đáp án tự luận ngắn.
+    Hữu ích khi file đáp án có kèm đơn vị như: 67Hz, 22,9mol, 31,4kg.
+    """
+    value = str(value or "").strip().replace(",", ".")
+    match = re.search(r"[-+]?\d+(?:\.\d+)?", value)
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
 def answer_equal(user_value: str, right_value: str) -> bool:
     u = normalize_answer_value(user_value)
     r = normalize_answer_value(right_value)
@@ -215,7 +252,15 @@ def answer_equal(user_value: str, right_value: str) -> bool:
     try:
         return abs(float(u) - float(r)) < 1e-9
     except ValueError:
-        return False
+        pass
+
+    # Cho phép người dùng nhập 67 thay vì 67Hz, 22,9 thay vì 22,9mol...
+    u_num = extract_first_number(user_value)
+    r_num = extract_first_number(right_value)
+    if u_num is not None and r_num is not None:
+        return abs(u_num - r_num) < 1e-9
+
+    return False
 
 
 def blank_answers(subject: str) -> dict:
@@ -280,6 +325,26 @@ def normalize_ai_answers(raw: dict, subject: str) -> dict:
     return fixed
 
 
+def prepare_answer_image_for_gemini(png_bytes: bytes) -> bytes:
+    """
+    Tăng độ rõ màu đáp án trước khi gửi Gemini.
+    Rất hữu ích với file đáp án là nguyên đề có khoanh/tô màu đáp án:
+    - vòng tròn đáp án thường tô vàng/xanh
+    - chữ scan PDF đôi khi nhạt, Gemini dễ bỏ qua màu highlight
+    """
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+
+    # Tăng màu và nét, nhưng không đổi nội dung.
+    img = ImageEnhance.Color(img).enhance(2.4)
+    img = ImageEnhance.Contrast(img).enhance(1.18)
+    img = ImageEnhance.Sharpness(img).enhance(1.35)
+    img = img.filter(ImageFilter.SHARPEN)
+
+    out = io.BytesIO()
+    img.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
 def answer_file_to_gemini_parts(path: str) -> list:
     """
     Chuyển ảnh/PDF đáp án thành list Part để gửi lên Gemini.
@@ -292,8 +357,11 @@ def answer_file_to_gemini_parts(path: str) -> list:
         doc = fitz.open(path)
         parts = []
         for page in doc:
-            pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5), alpha=False)
-            parts.append(types.Part.from_bytes(data=pix.tobytes("png"), mime_type="image/png"))
+            # Render cao hơn để Gemini đọc được vòng tròn tô màu/highlight nhỏ.
+            pix = page.get_pixmap(matrix=fitz.Matrix(4, 4), alpha=False)
+            png_bytes = prepare_answer_image_for_gemini(pix.tobytes("png"))
+            parts.append(types.Part.from_bytes(data=png_bytes, mime_type="image/png"))
+        doc.close()
         return parts
 
     mime = {
@@ -307,7 +375,16 @@ def answer_file_to_gemini_parts(path: str) -> list:
         raise ValueError("File đáp án phải là PDF hoặc ảnh PNG/JPG/JPEG/WEBP.")
 
     with open(path, "rb") as f:
-        return [types.Part.from_bytes(data=f.read(), mime_type=mime)]
+        raw = f.read()
+
+    # Với ảnh đáp án đã tô màu, tăng màu để tránh Gemini bỏ sót highlight.
+    try:
+        raw = prepare_answer_image_for_gemini(raw)
+        mime = "image/png"
+    except Exception:
+        pass
+
+    return [types.Part.from_bytes(data=raw, mime_type=mime)]
 
 
 def extract_json_from_text(text: str) -> dict:
@@ -344,39 +421,69 @@ def extract_answers_with_gemini(answer_file_path: str, subject: str) -> tuple[di
     image_parts = answer_file_to_gemini_parts(answer_file_path)
 
     prompt = f"""
-Bạn là hệ thống đọc đáp án đề thi THPTQG từ ảnh/PDF đáp án.
+Bạn là hệ thống OCR đọc ĐÁP ÁN THI từ ảnh/PDF. Nhiệm vụ của bạn là CHÉP LẠI ĐÁP ÁN ĐƯỢC ĐÁNH DẤU, không được giải đề.
 
 Môn: {cfg["label"]}
 
 Cấu trúc bắt buộc:
 - Phần I có đúng {cfg["part1_count"]} câu trắc nghiệm A/B/C/D.
 - Phần II có đúng {cfg["part2_count"]} câu đúng/sai, mỗi câu có 4 ý a,b,c,d.
-- Phần III có đúng {cfg["part3_count"]} câu trả lời ngắn. Nếu môn không có phần III thì part3 là object rỗng.
-- Nếu Phần II có 0 câu thì part2 là object rỗng. Nếu Phần III có 0 câu thì part3 là object rỗng.
+- Phần III có đúng {cfg["part3_count"]} câu trả lời ngắn.
+- Nếu phần nào có 0 câu thì trả object rỗng cho phần đó.
 
-Yêu cầu đọc:
-- Đọc theo bố cục bảng trong ảnh, không đọc lẫn cột.
-- Nếu ảnh đáp án dạng cột dọc, hãy lấy theo thứ tự từ trên xuống dưới:
-  đầu tiên là Phần I, tiếp theo là Phần II, cuối cùng là Phần III.
+Hãy tự nhận diện 2 kiểu file đáp án sau:
+
+KIỂU A — BẢNG ĐÁP ÁN RÚT GỌN:
+- Có tiêu đề như "ĐÁP ÁN", "ĐÁP ÁN THAM KHẢO".
+- Phần I: đọc bảng có hàng/cột "Câu" và "Đáp án". Ghép đáp án theo đúng số câu.
+- Phần II: đọc bảng có cột a,b,c,d và dòng Câu 1, Câu 2...
+  Đ, D, Đúng, Dung = true. S, Sai = false.
+- Phần III: đọc hàng/cột "Đáp án", giữ nguyên chuỗi kể cả đơn vị như 67Hz, 22,9mol, 31,4kg.
+
+KIỂU B — NGUYÊN ĐỀ ĐÃ TÔ/KHOANH ĐÁP ÁN:
+Đây là trường hợp rất quan trọng.
+- Phần I:
+  + Mỗi câu có 4 lựa chọn A/B/C/D.
+  + Đáp án đúng là lựa chọn có vòng tròn/chữ cái được TÔ MÀU, thường là màu VÀNG, XANH LÁ, hoặc được khoanh/highlight nổi bật.
+  + Các vòng tròn viền xanh nhạt/chỉ là ký hiệu lựa chọn bình thường KHÔNG PHẢI đáp án.
+  + Tuyệt đối KHÔNG chọn đáp án dựa trên nội dung câu hỏi.
+  + Nếu không thấy lựa chọn nào được tô/khoanh màu rõ ràng thì để "".
+- Phần II:
+  + Ưu tiên đọc nhãn ở cuối mỗi ý: [ĐÚNG] = true, [SAI] = false.
+  + Nếu không có nhãn nhưng có bảng Đ/S thì đọc theo bảng.
+  + Không tự suy luận đúng sai từ nội dung câu.
+- Phần III:
+  + Lấy đáp án ngắn được ghi trong bảng đáp án hoặc vùng được tô/highlight.
+  + Giữ nguyên đơn vị nếu có.
+
+QUY TẮC CHỐNG ĐỌC SAI:
+- Không tự giải đề.
+- Không đoán đáp án theo kiến thức.
+- Không lấy đáp án từ chữ A/B/C/D đầu dòng nếu nó không được tô/khoanh/highlight.
+- Không đọc lẫn cột hoặc lẫn dòng.
 - Không lấy mã đề làm đáp án.
-- Không lấy số thứ tự câu làm đáp án trả lời ngắn.
-- Phần I chỉ được A/B/C/D.
-- Phần II: Đúng = true, Sai = false. Các ký hiệu Đ, D, Đúng, Dung là true. S, Sai là false.
-- Phần III: giữ nguyên đáp án dạng chuỗi, ví dụ "4,9", "0,08", "3200".
-- Nếu không chắc, điền "" ở phần I/III hoặc null ở phần II.
+- Không lấy số thứ tự câu, chữ "Câu", chữ "Ý", tiêu đề bảng làm đáp án.
+- Với file đề tô đáp án, màu vàng/xanh nổi bật mới là đáp án; vòng tròn xanh nhạt thông thường chỉ là bullet lựa chọn.
+- Nếu đang phân vân giữa text và màu highlight, hãy tin theo màu highlight.
 
-Trả về DUY NHẤT JSON theo schema này, không giải thích:
+Trả về DUY NHẤT JSON hợp lệ, không markdown, không giải thích:
 {{
-  "part1": {{"1": "B", "2": "D"}},
-  "part2": {{
-    "1": {{"a": true, "b": false, "c": true, "d": true}}
+  "part1": {{
+    "1": "D",
+    "2": "C"
   }},
-  "part3": {{"1": "4,9", "2": "43"}}
+  "part2": {{
+    "1": {{"a": true, "b": true, "c": false, "d": true}}
+  }},
+  "part3": {{
+    "1": "4,9",
+    "2": "67Hz"
+  }}
 }}
 
-Với môn hiện tại, bắt buộc trả đủ:
+Bắt buộc trả đủ theo môn hiện tại:
 - part1: từ "1" đến "{cfg["part1_count"]}"
-- part2: từ "1" đến "{cfg["part2_count"]}", mỗi câu có a,b,c,d
+- part2: từ "1" đến "{cfg["part2_count"]}", mỗi câu có a,b,c,d nếu có
 - part3: từ "1" đến "{cfg["part3_count"]}" nếu có
 """
 
@@ -476,6 +583,82 @@ def build_result_summary(results: dict, score: float, max_score: float) -> dict:
     }
 
 
+def get_client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.headers.get("X-Real-IP") or request.remote_addr or ""
+
+
+def get_or_create_visitor_id() -> str:
+    visitor_id = session.get("visitor_id")
+    if not visitor_id:
+        visitor_id = f"v{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        session["visitor_id"] = visitor_id
+    return visitor_id
+
+
+def require_superadmin():
+    if not session.get("superadmin"):
+        abort(403)
+
+
+def log_submission(exam, subject: str, score: float, max_score: float, summary: dict):
+    started_at = request.form.get("started_at", "").strip()
+    duration_seconds = None
+
+    if started_at:
+        try:
+            started = datetime.fromisoformat(started_at)
+            duration_seconds = max(0, int((datetime.now() - started).total_seconds()))
+        except ValueError:
+            duration_seconds = None
+
+    conn = db()
+    conn.execute(
+        """
+        INSERT INTO submission_logs (
+            exam_id, exam_title, subject, score, max_score, wrong_total,
+            duration_seconds, ip_address, user_agent, visitor_id, submitted_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            exam["id"],
+            exam["title"],
+            subject,
+            float(score),
+            float(max_score),
+            int(summary.get("wrong_total", 0)),
+            duration_seconds,
+            get_client_ip(),
+            request.headers.get("User-Agent", "")[:500],
+            get_or_create_visitor_id(),
+            datetime.now().isoformat(timespec="seconds"),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def format_duration(seconds) -> str:
+    if seconds is None:
+        return ""
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        return ""
+
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+
+    if hours:
+        return f"{hours} giờ {minutes} phút {sec} giây"
+    if minutes:
+        return f"{minutes} phút {sec} giây"
+    return f"{sec} giây"
+
+
 def require_admin():
     if not session.get("admin"):
         abort(403)
@@ -535,6 +718,7 @@ def take_exam(exam_id):
         part2_numbers=range(1, cfg["part2_count"] + 1),
         part3_numbers=range(1, cfg["part3_count"] + 1),
         max_score=calculate_total_max_score(exam["subject"]),
+        started_at=datetime.now().isoformat(timespec="seconds"),
     )
 
 
@@ -621,6 +805,9 @@ def submit_exam(exam_id):
     score = round(score, 2)
     max_score = calculate_total_max_score(subject)
     summary = build_result_summary(results, score, max_score)
+
+    # Log lượt làm bài, không cần người dùng đăng nhập/đăng kí.
+    log_submission(exam, subject, score, max_score, summary)
 
     return render_template_string(
         RESULT_HTML,
@@ -834,6 +1021,102 @@ def admin_delete(exam_id):
     return redirect(url_for("admin_dashboard"))
 
 
+@app.route("/superadmin/login", methods=["GET", "POST"])
+def superadmin_login():
+    error = None
+    if request.method == "POST":
+        password = request.form.get("password")
+        if password == SUPERADMIN_PASSWORD:
+            session["superadmin"] = True
+            return redirect(url_for("superadmin_dashboard"))
+        error = "Sai mật khẩu SuperAdmin."
+    return render_template_string(SUPERADMIN_LOGIN_HTML, error=error)
+
+
+@app.route("/superadmin/logout")
+def superadmin_logout():
+    session.pop("superadmin", None)
+    return redirect(url_for("home"))
+
+
+@app.route("/superadmin")
+def superadmin_dashboard():
+    require_superadmin()
+
+    q = (request.args.get("q") or "").strip()
+    subject = (request.args.get("subject") or "all").strip().lower()
+
+    where = []
+    params = []
+
+    if subject in SUBJECTS:
+        where.append("subject=?")
+        params.append(subject)
+
+    if q:
+        where.append("(exam_title LIKE ? OR ip_address LIKE ? OR visitor_id LIKE ?)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
+
+    where_sql = "WHERE " + " AND ".join(where) if where else ""
+
+    conn = db()
+    logs = conn.execute(
+        f"""
+        SELECT * FROM submission_logs
+        {where_sql}
+        ORDER BY id DESC
+        LIMIT 300
+        """,
+        params,
+    ).fetchall()
+
+    stats = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS total_submits,
+            COUNT(DISTINCT visitor_id) AS total_visitors,
+            ROUND(AVG(score), 2) AS avg_score
+        FROM submission_logs
+        """
+    ).fetchone()
+
+    by_exam = conn.execute(
+        """
+        SELECT exam_title, subject, COUNT(*) AS total, ROUND(AVG(score), 2) AS avg_score
+        FROM submission_logs
+        GROUP BY exam_id, exam_title, subject
+        ORDER BY total DESC, exam_title ASC
+        LIMIT 20
+        """
+    ).fetchall()
+
+    conn.close()
+
+    return render_template_string(
+        SUPERADMIN_HTML,
+        logs=logs,
+        stats=stats,
+        by_exam=by_exam,
+        subjects=SUBJECTS,
+        selected_subject=subject,
+        q=q,
+        format_datetime_display=format_datetime_display,
+        format_duration=format_duration,
+        format_score=format_score,
+    )
+
+
+@app.route("/superadmin/clear-logs", methods=["POST"])
+def superadmin_clear_logs():
+    require_superadmin()
+    conn = db()
+    conn.execute("DELETE FROM submission_logs")
+    conn.commit()
+    conn.close()
+    return redirect(url_for("superadmin_dashboard"))
+
+
 BASE_CSS = """
 <!doctype html>
 <html lang="vi">
@@ -878,14 +1161,46 @@ BASE_CSS = """
         background: #111827;
         color: white;
         padding: 14px 28px;
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
         justify-content: space-between;
         align-items: center;
+        gap: 16px;
     }
 
     .nav a {
         color: white;
         margin-left: 16px;
+        font-weight: 800;
+    }
+
+    .nav > div:first-child {
+        font-weight: 800;
+        letter-spacing: .2px;
+    }
+
+    .nav > div:last-child {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .exam-countdown {
+        justify-self: center;
+        padding: 8px 14px;
+        border: 1px solid rgba(148, 163, 184, .35);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .75);
+        color: #e5e7eb;
+        font-weight: 800;
+        font-size: 14px;
+        white-space: nowrap;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .exam-countdown b {
+        color: #ffffff;
     }
 
     .container {
@@ -4471,7 +4786,496 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Fix riêng badge + điểm trong dark mode, không đổi giao diện phiếu ===== */
+    [data-theme="dark"] .mini-stats span,
+    [data-theme="dark"] .tiny-summary span,
+    [data-theme="dark"] .pill-count {
+        background: #1e293b !important;
+        color: #ffffff !important;
+        border-color: #475569 !important;
+    }
+
+    [data-theme="dark"] .mini-stats span b,
+    [data-theme="dark"] .tiny-summary span b,
+    [data-theme="dark"] .pill-count b {
+        color: #ffffff !important;
+    }
+
+    [data-theme="dark"] .review-score,
+    [data-theme="dark"] .score-number,
+    [data-theme="dark"] .score-badge .score-main,
+    [data-theme="dark"] .score-main,
+    [data-theme="dark"] .result-line .score {
+        color: #60a5fa !important;
+        text-shadow: 0 0 10px rgba(96,165,250,.16);
+    }
+
+    [data-theme="dark"] .score-sub,
+    [data-theme="dark"] .mini-stats,
+    [data-theme="dark"] .tiny-summary {
+        color: #cbd5e1 !important;
+    }
+
+
+    /* ===== Layout chốt: bỏ nút resize/thanh kéo, PDF trái + phiếu phải ổn định ===== */
+    .split-resizer,
+    .pdf-inline-tools,
+    .pdf-floating-tools,
+    .pdf-tools {
+        display: none !important;
+    }
+
+    .container:has(.grid),
+    .container:has(.review-sheet-layout) {
+        max-width: none !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 14px !important;
+    }
+
+    .grid,
+    .review-sheet-layout {
+        width: 100% !important;
+        max-width: none !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(560px, 590px) !important;
+        gap: 14px !important;
+        align-items: start !important;
+    }
+
+    .pdf-pane,
+    .answer-pane {
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    .answer-pane {
+        min-width: 560px !important;
+    }
+
+    .pdf,
+    .review-pdf {
+        width: 100% !important;
+        max-width: none !important;
+        display: block !important;
+        margin: 0 !important;
+        height: calc(100vh - 92px) !important;
+        min-height: 720px !important;
+        border-radius: 16px !important;
+    }
+
+    .timer,
+    .review-score {
+        flex-shrink: 0 !important;
+        white-space: nowrap !important;
+    }
+
+    @media (max-width: 1180px) {
+        .grid,
+        .review-sheet-layout {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+
+        .answer-pane {
+            min-width: 0 !important;
+        }
+
+        .pdf,
+        .review-pdf {
+            height: 76vh !important;
+            min-height: 620px !important;
+        }
+    }
+
+
+    /* Nav chữ đậm hơn + countdown responsive */
+    .nav a,
+    .nav .nav-home-link {
+        font-weight: 850 !important;
+        letter-spacing: .15px;
+    }
+
+    [data-theme="dark"] .exam-countdown {
+        background: #111827 !important;
+        color: #e5e7eb !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="light"] .exam-countdown {
+        background: #f8fafc !important;
+        color: #111827 !important;
+        border-color: #d1d5db !important;
+    }
+
+    [data-theme="light"] .exam-countdown b {
+        color: #111827 !important;
+    }
+
+    @media (max-width: 760px) {
+        .nav {
+            grid-template-columns: 1fr !important;
+            text-align: center !important;
+        }
+
+        .nav > div:last-child {
+            justify-content: center !important;
+            flex-wrap: wrap !important;
+        }
+
+        .exam-countdown {
+            font-size: 13px !important;
+            padding: 7px 11px !important;
+        }
+    }
+
+
+    /* ===== Countdown THPTQG góc phải nav ===== */
+    .nav {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        gap: 16px !important;
+    }
+
+    .nav > b,
+    .nav > div:first-child {
+        font-weight: 850 !important;
+        letter-spacing: .15px;
+        flex: 0 0 auto;
+    }
+
+    .nav-actions,
+    .nav > div:last-child {
+        margin-left: auto !important;
+        display: flex !important;
+        justify-content: flex-end !important;
+        align-items: center !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .nav a {
+        font-weight: 850 !important;
+    }
+
+    .exam-countdown {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        justify-self: auto !important;
+        padding: 8px 13px !important;
+        border-radius: 999px !important;
+        border: 1px solid rgba(148, 163, 184, .35) !important;
+        background: rgba(15, 23, 42, .72) !important;
+        color: #e5e7eb !important;
+        font-weight: 850 !important;
+        font-size: 14px !important;
+        line-height: 1 !important;
+        white-space: nowrap !important;
+        margin: 0 !important;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .exam-countdown b {
+        color: #ffffff !important;
+        margin: 0 3px;
+    }
+
+    [data-theme="light"] .exam-countdown {
+        background: #f8fafc !important;
+        color: #111827 !important;
+        border-color: #d1d5db !important;
+    }
+
+    [data-theme="light"] .exam-countdown b {
+        color: #111827 !important;
+    }
+
+    [data-theme="dark"] .exam-countdown {
+        background: #111827 !important;
+        color: #e5e7eb !important;
+        border-color: #334155 !important;
+    }
+
+    @media (max-width: 760px) {
+        .nav {
+            flex-wrap: wrap !important;
+            text-align: left !important;
+        }
+
+        .nav-actions,
+        .nav > div:last-child {
+            width: 100% !important;
+            justify-content: flex-start !important;
+        }
+
+        .exam-countdown {
+            font-size: 13px !important;
+            padding: 7px 11px !important;
+        }
+    }
+
+
+    /* ===== SuperAdmin logs ===== */
+    .super-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 16px;
+    }
+
+    .super-stat {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    }
+
+    .super-stat span {
+        color: #64748b;
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    .super-stat b {
+        display: block;
+        font-size: 30px;
+        margin-top: 6px;
+    }
+
+    .super-filter {
+        display: grid;
+        grid-template-columns: 220px 1fr auto;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .super-filter input,
+    .super-filter select,
+    .super-filter button {
+        margin-bottom: 0;
+    }
+
+    .super-filter-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .link-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 10px;
+        border: 1px solid #d1d5db;
+        background: white;
+        color: #111827;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .super-head-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        align-items: flex-start;
+    }
+
+    .super-head-row form {
+        flex: 0 0 auto;
+    }
+
+    .super-table-wrap {
+        overflow: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+    }
+
+    .super-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 980px;
+        background: white;
+    }
+
+    .super-table th,
+    .super-table td {
+        padding: 11px 12px;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+    }
+
+    .super-table th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+
+    .super-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .score-cell {
+        font-weight: 900;
+        color: #2563eb;
+        white-space: nowrap;
+    }
+
+    .nowrap {
+        white-space: nowrap;
+    }
+
+    .ua-cell {
+        max-width: 360px;
+        color: #64748b;
+        font-size: 12px !important;
+        word-break: break-word;
+    }
+
+    [data-theme="dark"] .super-stat,
+    [data-theme="dark"] .super-table,
+    [data-theme="dark"] .link-btn {
+        background: #0f172a !important;
+        color: #e5e7eb !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .super-stat span,
+    [data-theme="dark"] .ua-cell {
+        color: #94a3b8 !important;
+    }
+
+    [data-theme="dark"] .super-table-wrap {
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .super-table th {
+        background: #111827 !important;
+        color: #cbd5e1 !important;
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .super-table td {
+        border-color: #334155 !important;
+    }
+
+    [data-theme="dark"] .score-cell {
+        color: #60a5fa !important;
+    }
+
+    @media (max-width: 800px) {
+        .super-stats {
+            grid-template-columns: 1fr;
+        }
+
+        .super-filter {
+            grid-template-columns: 1fr;
+        }
+
+        .super-head-row {
+            flex-direction: column;
+        }
+    }
+
 </style>
+
+<script>
+    (function () {
+        function ensureNavActions() {
+            const nav = document.querySelector(".nav");
+            if (!nav) return null;
+
+            let actions = nav.querySelector(":scope > .nav-actions");
+            if (actions) return actions;
+
+            actions = document.createElement("div");
+            actions.className = "nav-actions";
+
+            const children = Array.from(nav.children);
+            children.slice(1).forEach(child => actions.appendChild(child));
+            nav.appendChild(actions);
+
+            return actions;
+        }
+
+        function updateCountdownText(el) {
+            // Mốc thi THPTQG 2026: 11/06/2026
+            const target = new Date(2026, 5, 11, 0, 0, 0);
+            const now = new Date();
+            const days = Math.ceil((target - now) / (24 * 60 * 60 * 1000));
+
+            if (days > 0) {
+                el.innerHTML = 'THPTQG 2026: còn <b>' + days + '</b> ngày';
+            } else if (days === 0) {
+                el.innerHTML = 'THPTQG 2026: <b>hôm nay thi</b>';
+            } else {
+                el.innerHTML = 'THPTQG 2026: <b>đã diễn ra</b>';
+            }
+        }
+
+        function initCountdownRight() {
+            const actions = ensureNavActions();
+            if (!actions) return;
+
+            let el = document.getElementById("examCountdown");
+            if (!el) {
+                el = document.createElement("div");
+                el.id = "examCountdown";
+                el.className = "exam-countdown";
+                actions.insertBefore(el, actions.firstChild);
+            } else if (el.parentElement !== actions) {
+                actions.insertBefore(el, actions.firstChild);
+            }
+
+            updateCountdownText(el);
+            setInterval(function () {
+                updateCountdownText(el);
+            }, 60 * 60 * 1000);
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initCountdownRight);
+        } else {
+            initCountdownRight();
+        }
+    })();
+</script>
+
+
+<script>
+    (function () {
+        function updateExamCountdown() {
+            const el = document.getElementById("examCountdown");
+            if (!el) return;
+
+            // Ngày thi THPTQG 2026: 11/06/2026
+            const target = new Date(2026, 5, 11, 0, 0, 0);
+            const now = new Date();
+            const msPerDay = 24 * 60 * 60 * 1000;
+            const days = Math.ceil((target - now) / msPerDay);
+
+            if (days > 0) {
+                el.innerHTML = 'THPTQG 2026: còn <b>' + days + '</b> ngày';
+            } else if (days === 0) {
+                el.innerHTML = 'THPTQG 2026: <b>hôm nay thi</b>';
+            } else {
+                el.innerHTML = 'THPTQG 2026: <b>đã diễn ra</b>';
+            }
+        }
+
+        updateExamCountdown();
+        setInterval(updateExamCountdown, 60 * 60 * 1000);
+    })();
+</script>
+
 
 <script>
     (function () {
@@ -4543,6 +5347,160 @@ BASE_CSS = """
 </script>
 
 """
+
+
+SUPERADMIN_LOGIN_HTML = BASE_CSS + """
+<div class="nav">
+    <div><b>SuperAdmin</b></div>
+    <div>
+        <a href="{{ url_for('home') }}">Trang chủ</a>
+    </div>
+</div>
+
+<div class="container" style="max-width:520px">
+    <div class="card">
+        <h1>SuperAdmin Login</h1>
+        <p class="muted">Trang xem log lượt làm bài.</p>
+
+        {% if error %}
+            <div class="card wrong">{{ error }}</div>
+        {% endif %}
+
+        <form method="post">
+            <label>Mật khẩu SuperAdmin</label>
+            <input type="password" name="password" placeholder="Nhập mật khẩu" autofocus>
+            <button type="submit">Đăng nhập</button>
+        </form>
+    </div>
+</div>
+"""
+
+
+SUPERADMIN_HTML = BASE_CSS + """
+<div class="nav">
+    <div><b>SuperAdmin Logs</b></div>
+    <div>
+        <a href="{{ url_for('home') }}">Trang chủ</a>
+        <a href="{{ url_for('superadmin_logout') }}">Đăng xuất</a>
+    </div>
+</div>
+
+<div class="container">
+    <div class="super-stats">
+        <div class="super-stat">
+            <span>Tổng lượt nộp</span>
+            <b>{{ stats.total_submits or 0 }}</b>
+        </div>
+        <div class="super-stat">
+            <span>Thiết bị/người ước tính</span>
+            <b>{{ stats.total_visitors or 0 }}</b>
+        </div>
+        <div class="super-stat">
+            <span>Điểm trung bình</span>
+            <b>{{ format_score(stats.avg_score or 0) }}</b>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Bộ lọc</h2>
+        <form method="get" class="super-filter">
+            <div>
+                <label>Môn</label>
+                <select name="subject">
+                    <option value="all" {% if selected_subject == "all" %}selected{% endif %}>Tất cả</option>
+                    {% for key, sub in subjects.items() %}
+                        <option value="{{ key }}" {% if selected_subject == key %}selected{% endif %}>{{ sub.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Tìm theo đề / IP / visitor</label>
+                <input name="q" value="{{ q }}" placeholder="Ví dụ: Tây Ninh, 113.160..., v2026...">
+            </div>
+            <div class="super-filter-actions">
+                <button type="submit">Lọc</button>
+                <a class="link-btn" href="{{ url_for('superadmin_dashboard') }}">Xóa lọc</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Top đề có lượt làm nhiều</h2>
+        <div class="super-table-wrap">
+            <table class="super-table">
+                <thead>
+                    <tr>
+                        <th>Đề</th>
+                        <th>Môn</th>
+                        <th>Lượt</th>
+                        <th>Điểm TB</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in by_exam %}
+                    <tr>
+                        <td>{{ row.exam_title }}</td>
+                        <td>{{ subjects[row.subject].label if row.subject in subjects else row.subject }}</td>
+                        <td>{{ row.total }}</td>
+                        <td>{{ format_score(row.avg_score or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="muted">Chưa có dữ liệu.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="super-head-row">
+            <div>
+                <h2>Log lượt làm bài</h2>
+                <p class="muted">Không cần tài khoản. Hệ thống ghi theo IP, trình duyệt, visitor_id trong session và thời gian nộp.</p>
+            </div>
+            <form method="post" action="{{ url_for('superadmin_clear_logs') }}" onsubmit="return confirm('Xóa toàn bộ log?')">
+                <button class="danger" type="submit">Xóa log</button>
+            </form>
+        </div>
+
+        <div class="super-table-wrap">
+            <table class="super-table">
+                <thead>
+                    <tr>
+                        <th>Thời gian nộp</th>
+                        <th>Đề</th>
+                        <th>Môn</th>
+                        <th>Điểm</th>
+                        <th>Sai/cần xem</th>
+                        <th>Thời gian làm</th>
+                        <th>IP</th>
+                        <th>Visitor</th>
+                        <th>Thiết bị</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="nowrap">{{ format_datetime_display(log.submitted_at) }}</td>
+                        <td>{{ log.exam_title }}</td>
+                        <td>{{ subjects[log.subject].label if log.subject in subjects else log.subject }}</td>
+                        <td class="score-cell">{{ format_score(log.score) }}/{{ format_score(log.max_score) }}</td>
+                        <td>{{ log.wrong_total }}</td>
+                        <td class="nowrap">{{ format_duration(log.duration_seconds) or "Không rõ" }}</td>
+                        <td class="nowrap">{{ log.ip_address or "" }}</td>
+                        <td class="nowrap">{{ log.visitor_id or "" }}</td>
+                        <td class="ua-cell">{{ log.user_agent or "" }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="9" class="muted">Chưa có lượt nộp bài nào.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+"""
+
 
 
 HOME_HTML = BASE_CSS + """
@@ -5342,6 +6300,8 @@ RESULT_HTML = BASE_CSS + """
     </div>
 </div>
 """
+
+
 
 
 migrate_old_db_if_needed()
