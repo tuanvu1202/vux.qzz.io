@@ -1398,11 +1398,11 @@ BASE_CSS = """
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Web của Vũ</title>
+    <title>quép sai của Vũ</title>
     <meta name="description" content="Không có chi mô">
     <meta name="theme-color" content="#111827">
 
-    <meta property="og:title" content="Web của Vũ">
+    <meta property="og:title" content="quép sai của Vũ">
     <meta property="og:description" content="Không có chi mô">
     <meta property="og:type" content="website">
 
