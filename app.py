@@ -719,7 +719,8 @@ def log_submission(exam, subject: str, score: float, max_score: float, summary: 
 
     if started_at:
         try:
-            started = datetime.fromisoformat(started_at)
+            started_clean = started_at.replace("Z", "").split(".")[0]
+            started = datetime.fromisoformat(started_clean)
             duration_seconds = max(0, int((datetime.now() - started).total_seconds()))
         except ValueError:
             duration_seconds = None
@@ -6739,6 +6740,52 @@ BASE_CSS = """
 
 <script>
     (function () {
+        if (location.pathname.includes("/submit")) {
+            try {
+                const examPath = location.pathname.replace("/submit", "");
+                sessionStorage.removeItem("quizStartedAt:" + examPath);
+            } catch (e) {}
+        }
+    })();
+</script>
+
+
+<script>
+    (function () {
+        function ensureStartedAtForQuiz() {
+            const form = document.getElementById("quizForm");
+            if (!form) return;
+
+            let input = form.querySelector('input[name="started_at"]');
+            if (!input) {
+                input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "started_at";
+                form.prepend(input);
+            }
+
+            if (!input.value) {
+                const key = "quizStartedAt:" + location.pathname;
+                let started = sessionStorage.getItem(key);
+                if (!started) {
+                    started = new Date().toISOString().slice(0, 19);
+                    sessionStorage.setItem(key, started);
+                }
+                input.value = started;
+            }
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", ensureStartedAtForQuiz);
+        } else {
+            ensureStartedAtForQuiz();
+        }
+    })();
+</script>
+
+
+<script>
+    (function () {
         function initParticipantNameMemory() {
             const input = document.getElementById("participantName");
             if (!input) return;
@@ -7767,6 +7814,7 @@ TAKE_EXAM_HTML = BASE_CSS + """
 
         <div class="answer-pane">
             <form id="quizForm" class="card sheet-card" method="post" action="/exam/{{ exam.id }}/submit">
+                <input type="hidden" name="started_at" value="{{ started_at }}">
                 <div class="sheet-top exam-sheet-top">
                     <div class="sheet-title-row">
                         <h1>Phiếu trả lời</h1>
