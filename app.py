@@ -678,6 +678,8 @@ def format_datetime_display(value: str) -> str:
 def home():
     selected_subject = (request.args.get("subject") or "all").strip().lower()
 
+    visitor_id = get_or_create_visitor_id()
+
     conn = db()
     if selected_subject in SUBJECTS:
         exams = conn.execute(
@@ -689,14 +691,28 @@ def home():
         exams = conn.execute(
             "SELECT id, title, subject, created_at FROM exams ORDER BY id DESC"
         ).fetchall()
+
+    done_rows = conn.execute(
+        """
+        SELECT exam_id, MAX(score) AS best_score, MAX(max_score) AS max_score, MAX(submitted_at) AS last_done_at, COUNT(*) AS attempt_count
+        FROM submission_logs
+        WHERE visitor_id=?
+        GROUP BY exam_id
+        """,
+        (visitor_id,),
+    ).fetchall()
     conn.close()
+
+    done_map = {int(row["exam_id"]): row for row in done_rows if row["exam_id"] is not None}
 
     return render_template_string(
         HOME_HTML,
         exams=exams,
         subjects=SUBJECTS,
         selected_subject=selected_subject,
+        done_map=done_map,
         format_datetime_display=format_datetime_display,
+        format_score=format_score,
     )
 
 
@@ -917,6 +933,28 @@ def admin_upload():
     conn.close()
 
     # Vẫn qua trang sửa để admin nhìn qua nhanh; nếu chuẩn thì bấm lưu hoặc mở bài luôn.
+    return redirect(url_for("admin_edit_answers", exam_id=exam_id))
+
+
+@app.route("/admin/rename-exam/<int:exam_id>", methods=["POST"])
+def admin_rename_exam(exam_id):
+    require_admin()
+
+    new_title = request.form.get("new_title", "").strip()
+    if not new_title:
+        return "Tên đề không được để trống", 400
+
+    conn = db()
+    exam = conn.execute("SELECT id FROM exams WHERE id=?", (exam_id,)).fetchone()
+    if not exam:
+        conn.close()
+        abort(404)
+
+    conn.execute("UPDATE exams SET title=? WHERE id=?", (new_title, exam_id))
+    conn.execute("UPDATE submission_logs SET exam_title=? WHERE exam_id=?", (new_title, exam_id))
+    conn.commit()
+    conn.close()
+
     return redirect(url_for("admin_edit_answers", exam_id=exam_id))
 
 
@@ -5479,6 +5517,109 @@ BASE_CSS = """
         }
     }
 
+
+    /* ===== Đánh dấu đề đã làm ở trang chủ ===== */
+    .exam-card-done {
+        position: relative;
+        border: 1px solid #bbf7d0 !important;
+        background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+    }
+
+    .exam-row-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .exam-row-main {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .done-badge {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #86efac;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .done-meta {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+    }
+
+    .done-meta span {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: #ecfdf5;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    [data-theme="dark"] .exam-card-done {
+        background: linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+        border-color: #166534 !important;
+    }
+
+    [data-theme="dark"] .done-badge {
+        background: #052e16 !important;
+        color: #86efac !important;
+        border-color: #16a34a !important;
+    }
+
+    [data-theme="dark"] .done-meta span {
+        background: #052e16 !important;
+        color: #bbf7d0 !important;
+        border-color: #166534 !important;
+    }
+
+    @media (max-width: 640px) {
+        .exam-row-head {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+
+    /* ===== Admin đổi tên đề ===== */
+    .rename-title-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: end;
+        margin-top: 12px;
+    }
+
+    .rename-title-form input,
+    .rename-title-form button {
+        margin-bottom: 0;
+    }
+
+    .rename-title-form button {
+        white-space: nowrap;
+    }
+
+    @media (max-width: 700px) {
+        .rename-title-form {
+            grid-template-columns: 1fr;
+        }
+    }
+
 </style>
 
 <script>
@@ -5821,6 +5962,7 @@ HOME_HTML = BASE_CSS + """
 
     {% if exams %}
         {% for exam in exams %}
+                {% set done = done_map.get(exam.id) %}
             <div class="card exam-list-card">
                 <div class="exam-card-row">
                     <div class="subject-icon {{ exam.subject }}">{{ subjects[exam.subject].icon }}</div>
@@ -5828,7 +5970,21 @@ HOME_HTML = BASE_CSS + """
                     <div>
                         <div class="exam-card-top">
                             <div>
+                                <div class="exam-row-head">
+                            <div class="exam-row-main">
                                 <h2>{{ exam.title }}</h2>
+                            </div>
+                            {% if done %}
+                                <div class="done-badge">✓ Đã làm</div>
+                            {% endif %}
+                        </div>
+                        {% if done %}
+                            <div class="done-meta">
+                                <span>Điểm cao nhất: {{ format_score(done.best_score) }}/{{ format_score(done.max_score) }}</span>
+                                <span>Lần gần nhất: {{ format_datetime_display(done.last_done_at) }}</span>
+                                <span>Số lần: {{ done.attempt_count }}</span>
+                            </div>
+                        {% endif %}
                                 <p class="muted exam-meta">Ngày tạo: {{ format_datetime_display(exam.created_at) }}</p>
                             </div>
 
@@ -5841,7 +5997,7 @@ HOME_HTML = BASE_CSS + """
             </div>
         {% endfor %}
     {% else %}
-        <div class="card">
+        <div class="card {% if done %}exam-card-done{% endif %}">
             <h2 style="margin-top:0">Chưa có đề phù hợp</h2>
             <p class="muted" style="margin-bottom:0">Hiện chưa có đề nào trong bộ lọc bạn đang chọn.</p>
         </div>
@@ -5962,6 +6118,14 @@ EDIT_ANSWERS_HTML = BASE_CSS + """
             <p class="muted" style="margin-bottom:0">
                 Môn: {{ cfg.label }} · Nếu Gemini đọc sai thì sửa nhanh bên dưới rồi lưu.
             </p>
+
+            <form class="rename-title-form" method="post" action="{{ url_for('admin_rename_exam', exam_id=exam.id) }}">
+                <div>
+                    <label>Đổi tên đề</label>
+                    <input name="new_title" value="{{ exam.title }}" placeholder="Nhập tên đề mới" required>
+                </div>
+                <button type="submit">Đổi tên</button>
+            </form>
         </div>
 
         <div class="admin-tools-grid">
