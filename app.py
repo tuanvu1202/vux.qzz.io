@@ -151,7 +151,8 @@ def init_db():
             exam_file TEXT NOT NULL,
             answer_file TEXT NOT NULL,
             data_json TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            display_order INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -206,6 +207,25 @@ def migrate_old_db_if_needed():
         required = {"id", "title", "subject", "exam_file", "answer_file", "data_json", "created_at"}
         if not required.issubset(col_names):
             conn.execute("DROP TABLE IF EXISTS exams")
+            conn.commit()
+        # Bổ sung cột sắp xếp đề cho database cũ.
+        cols = conn.execute("PRAGMA table_info(exams)").fetchall()
+        col_names = {c["name"] for c in cols}
+        if "display_order" not in col_names:
+            conn.execute("ALTER TABLE exams ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0")
+            conn.commit()
+    finally:
+        conn.close()
+
+
+
+def ensure_display_order_column():
+    conn = db()
+    try:
+        cols = conn.execute("PRAGMA table_info(exams)").fetchall()
+        col_names = {c["name"] for c in cols}
+        if cols and "display_order" not in col_names:
+            conn.execute("ALTER TABLE exams ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0")
             conn.commit()
     finally:
         conn.close()
@@ -755,13 +775,36 @@ def home():
     conn = db()
     if selected_subject in SUBJECTS:
         exams = conn.execute(
-            "SELECT id, title, subject, created_at FROM exams WHERE subject=? ORDER BY id DESC",
+            """
+            SELECT
+                e.id, e.title, e.subject, e.created_at, e.display_order,
+                COALESCE(s.submit_count, 0) AS submit_count
+            FROM exams e
+            LEFT JOIN (
+                SELECT exam_id, COUNT(*) AS submit_count
+                FROM submission_logs
+                GROUP BY exam_id
+            ) s ON s.exam_id = e.id
+            WHERE e.subject=?
+            ORDER BY COALESCE(s.submit_count, 0) DESC, e.display_order DESC, e.id DESC
+            """,
             (selected_subject,)
         ).fetchall()
     else:
         selected_subject = "all"
         exams = conn.execute(
-            "SELECT id, title, subject, created_at FROM exams ORDER BY id DESC"
+            """
+            SELECT
+                e.id, e.title, e.subject, e.created_at, e.display_order,
+                COALESCE(s.submit_count, 0) AS submit_count
+            FROM exams e
+            LEFT JOIN (
+                SELECT exam_id, COUNT(*) AS submit_count
+                FROM submission_logs
+                GROUP BY exam_id
+            ) s ON s.exam_id = e.id
+            ORDER BY COALESCE(s.submit_count, 0) DESC, e.display_order DESC, e.id DESC
+            """
         ).fetchall()
 
     done_rows = conn.execute(
@@ -775,6 +818,13 @@ def home():
     ).fetchall()
     done_map = {int(row["exam_id"]): row for row in done_rows if row["exam_id"] is not None}
 
+    best_seller_count = 0
+    for exam_row in exams:
+        try:
+            best_seller_count = max(best_seller_count, int(exam_row["submit_count"] or 0))
+        except (KeyError, TypeError, ValueError):
+            pass
+
     visitor_count = conn.execute("SELECT COUNT(*) AS c FROM site_visitors").fetchone()["c"]
     submit_count = conn.execute("SELECT COUNT(*) AS c FROM submission_logs").fetchone()["c"]
     conn.close()
@@ -787,6 +837,7 @@ def home():
         done_map=done_map,
         visitor_count=visitor_count,
         submit_count=submit_count,
+        best_seller_count=best_seller_count,
         format_datetime_display=format_datetime_display,
         format_score=format_score,
     )
@@ -941,7 +992,7 @@ def admin_logout():
 def admin_dashboard():
     require_admin()
     conn = db()
-    exams = conn.execute("SELECT id, title, subject, created_at FROM exams ORDER BY id DESC").fetchall()
+    exams = conn.execute("SELECT id, title, subject, created_at, display_order FROM exams ORDER BY display_order DESC, id DESC").fetchall()
     conn.close()
     return render_template_string(ADMIN_HTML, exams=exams, subjects=SUBJECTS, model=GEMINI_MODEL)
 
@@ -992,8 +1043,8 @@ def admin_upload():
     conn = db()
     cur = conn.execute(
         """
-        INSERT INTO exams (title, subject, exam_file, answer_file, data_json, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO exams (title, subject, exam_file, answer_file, data_json, created_at, display_order)
+        VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT MAX(display_order) FROM exams), 0) + 1)
         """,
         (
             title,
@@ -1156,6 +1207,73 @@ def admin_preview(exam_id):
         cfg=cfg,
         data_pretty=data_pretty,
     )
+
+
+@app.route("/admin/exam-order/<int:exam_id>/<action>", methods=["POST"])
+def admin_exam_order(exam_id, action):
+    require_admin()
+
+    if action not in {"top", "bottom", "up", "down"}:
+        return "Hành động không hợp lệ", 400
+
+    conn = db()
+    exam = conn.execute("SELECT id, display_order FROM exams WHERE id=?", (exam_id,)).fetchone()
+    if not exam:
+        conn.close()
+        abort(404)
+
+    current_order = int(exam["display_order"] or 0)
+
+    if action == "top":
+        new_order = conn.execute("SELECT COALESCE(MAX(display_order), 0) + 1 AS v FROM exams").fetchone()["v"]
+        conn.execute("UPDATE exams SET display_order=? WHERE id=?", (new_order, exam_id))
+
+    elif action == "bottom":
+        new_order = conn.execute("SELECT COALESCE(MIN(display_order), 0) - 1 AS v FROM exams").fetchone()["v"]
+        conn.execute("UPDATE exams SET display_order=? WHERE id=?", (new_order, exam_id))
+
+    elif action == "up":
+        # Đổi chỗ với đề ngay phía trên.
+        other = conn.execute(
+            """
+            SELECT id, display_order FROM exams
+            WHERE display_order > ?
+            ORDER BY display_order ASC, id ASC
+            LIMIT 1
+            """,
+            (current_order,),
+        ).fetchone()
+
+        if other:
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (other["display_order"], exam_id))
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (current_order, other["id"]))
+        else:
+            new_order = conn.execute("SELECT COALESCE(MAX(display_order), 0) + 1 AS v FROM exams").fetchone()["v"]
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (new_order, exam_id))
+
+    elif action == "down":
+        # Đổi chỗ với đề ngay phía dưới.
+        other = conn.execute(
+            """
+            SELECT id, display_order FROM exams
+            WHERE display_order < ?
+            ORDER BY display_order DESC, id DESC
+            LIMIT 1
+            """,
+            (current_order,),
+        ).fetchone()
+
+        if other:
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (other["display_order"], exam_id))
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (current_order, other["id"]))
+        else:
+            new_order = conn.execute("SELECT COALESCE(MIN(display_order), 0) - 1 AS v FROM exams").fetchone()["v"]
+            conn.execute("UPDATE exams SET display_order=? WHERE id=?", (new_order, exam_id))
+
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/delete/<int:exam_id>", methods=["POST"])
@@ -5892,7 +6010,217 @@ BASE_CSS = """
         border-color: #166534 !important;
     }
 
+
+    /* ===== Admin sắp xếp thứ tự đề ===== */
+    .order-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+
+    .order-actions form {
+        margin: 0;
+    }
+
+    .order-actions button {
+        margin: 0;
+        width: auto;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 13px;
+        background: #eef2ff;
+        color: #3730a3;
+        border: 1px solid #c7d2fe;
+    }
+
+    .order-actions button:hover {
+        background: #e0e7ff;
+    }
+
+    [data-theme="dark"] .order-actions button {
+        background: #1e293b !important;
+        color: #c7d2fe !important;
+        border-color: #475569 !important;
+    }
+
+    [data-theme="dark"] .order-actions button:hover {
+        background: #334155 !important;
+    }
+
+
+    /* ===== Best seller exam badge ===== */
+    .best-seller-badge {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #f59e0b, #ef4444);
+        color: #ffffff;
+        border: 1px solid rgba(255,255,255,.25);
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .25px;
+        white-space: nowrap;
+        box-shadow: 0 8px 22px rgba(245, 158, 11, .22);
+    }
+
+    .best-seller-card {
+        border-color: rgba(245, 158, 11, .55) !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .12), transparent 32%),
+            var(--card-bg, white) !important;
+    }
+
+    .exam-popularity {
+        margin-top: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        background: #fff7ed;
+        color: #9a3412;
+        border: 1px solid #fed7aa;
+        font-size: 12px;
+        font-weight: 850;
+    }
+
+    [data-theme="dark"] .best-seller-card {
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .16), transparent 35%),
+            #0f172a !important;
+        border-color: rgba(245, 158, 11, .45) !important;
+    }
+
+    [data-theme="dark"] .exam-popularity {
+        background: #431407 !important;
+        color: #fed7aa !important;
+        border-color: #9a3412 !important;
+    }
+
+
+    /* ===== Fix: đề đã làm vẫn giữ nền xanh kể cả khi là BEST SELLER ===== */
+    .exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .16), transparent 30%),
+            linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+    }
+
+    [data-theme="dark"] .exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .18), transparent 34%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+    .exam-card-done .done-badge,
+    .exam-card-done .done-meta span,
+    .exam-card-done .local-done-badge,
+    .exam-card-done .local-done-meta span {
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, .12);
+    }
+
+
+    /* ===== FINAL OVERRIDE: giữ nền xanh cho đề đã làm ===== */
+    .card.exam-card-done,
+    .exam-card.exam-card-done,
+    .card.exam-card-done.best-seller-card,
+    .exam-card.exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .14), transparent 32%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+    [data-theme="light"] .card.exam-card-done,
+    [data-theme="light"] .exam-card.exam-card-done,
+    [data-theme="light"] .card.exam-card-done.best-seller-card,
+    [data-theme="light"] .exam-card.exam-card-done.best-seller-card {
+        border-color: #86efac !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .12), transparent 32%),
+            linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+    }
+
+    [data-theme="dark"] .card.exam-card-done,
+    [data-theme="dark"] .exam-card.exam-card-done,
+    [data-theme="dark"] .card.exam-card-done.best-seller-card,
+    [data-theme="dark"] .exam-card.exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .16), transparent 34%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+
+    /* ===== FORCE: card có badge Đã làm luôn xanh ===== */
+    .card.exam-card-done {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(34, 197, 94, .10), transparent 35%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+    .card.exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .16), transparent 34%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+    [data-theme="light"] .card.exam-card-done {
+        border-color: #86efac !important;
+        background:
+            radial-gradient(circle at top right, rgba(34, 197, 94, .10), transparent 35%),
+            linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+    }
+
+    [data-theme="light"] .card.exam-card-done.best-seller-card {
+        border-color: #86efac !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .12), transparent 32%),
+            linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+    }
+
+    [data-theme="dark"] .card.exam-card-done {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(34, 197, 94, .10), transparent 35%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
+    [data-theme="dark"] .card.exam-card-done.best-seller-card {
+        border-color: #166534 !important;
+        background:
+            radial-gradient(circle at top right, rgba(245, 158, 11, .16), transparent 34%),
+            linear-gradient(180deg, #0f172a 0%, #052e16 100%) !important;
+    }
+
 </style>
+
+<script>
+    (function () {
+        function forceDoneCardGreen() {
+            document.querySelectorAll(".done-badge, .local-done-badge").forEach(function (badge) {
+                const card = badge.closest(".card");
+                if (card) {
+                    card.classList.add("exam-card-done");
+                }
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", forceDoneCardGreen);
+        } else {
+            forceDoneCardGreen();
+        }
+    })();
+</script>
+
 
 <script>
     (function () {
@@ -6452,9 +6780,14 @@ HOME_HTML = BASE_CSS + """
                             <div class="exam-row-main">
                                 <h2>{{ exam.title }}</h2>
                             </div>
-                            {% if done %}
-                                <div class="done-badge">✓ Đã làm</div>
-                            {% endif %}
+                            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                                {% if exam.submit_count and exam.submit_count == best_seller_count and best_seller_count > 0 %}
+                                    <div class="best-seller-badge">🔥 BEST SELLER</div>
+                                {% endif %}
+                                {% if done %}
+                                    <div class="done-badge">✓ Đã làm</div>
+                                {% endif %}
+                            </div>
                         </div>
                         {% if done %}
                             <div class="done-meta">
@@ -6475,7 +6808,7 @@ HOME_HTML = BASE_CSS + """
             </div>
         {% endfor %}
     {% else %}
-        <div class="card {% if done %}exam-card-done{% endif %}">
+        <div class="card exam-card {% if done %}exam-card-done{% endif %} {% if exam.submit_count and exam.submit_count == best_seller_count and best_seller_count > 0 %}best-seller-card{% endif %}">
             <h2 style="margin-top:0">Chưa có đề phù hợp</h2>
             <p class="muted" style="margin-bottom:0">Hiện chưa có đề nào trong bộ lọc bạn đang chọn.</p>
         </div>
@@ -6565,6 +6898,22 @@ ADMIN_HTML = BASE_CSS + """
                 <a href="/exam/{{ exam.id }}">Xem quiz</a>
                 ·
                 <a href="/admin/edit/{{ exam.id }}">Sửa đáp án</a>
+
+                    <div class="order-actions">
+                        <form method="post" action="{{ url_for('admin_exam_order', exam_id=exam.id, action='top') }}">
+                            <button type="submit">Đưa lên đầu</button>
+                        </form>
+                        <form method="post" action="{{ url_for('admin_exam_order', exam_id=exam.id, action='up') }}">
+                            <button type="submit">Lên 1 bậc</button>
+                        </form>
+                        <form method="post" action="{{ url_for('admin_exam_order', exam_id=exam.id, action='down') }}">
+                            <button type="submit">Xuống 1 bậc</button>
+                        </form>
+                        <form method="post" action="{{ url_for('admin_exam_order', exam_id=exam.id, action='bottom') }}">
+                            <button type="submit">Xuống cuối</button>
+                        </form>
+                    </div>
+
                 ·
                 <a href="/admin/preview/{{ exam.id }}">Xem JSON</a>
 
@@ -7282,9 +7631,11 @@ RESULT_HTML = BASE_CSS + """
 
 migrate_old_db_if_needed()
 init_db()
+ensure_display_order_column()
 
 
 if __name__ == "__main__":
     migrate_old_db_if_needed()
     init_db()
+    ensure_display_order_column()
     app.run(debug=True)
