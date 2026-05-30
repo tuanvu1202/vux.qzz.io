@@ -1385,7 +1385,7 @@ def leaderboard():
         FROM submission_logs
         {where_sql}
         ORDER BY score DESC, duration_seconds ASC, submitted_at ASC
-        LIMIT 10
+        LIMIT 100
         """,
         params,
     ).fetchall()
@@ -6464,57 +6464,194 @@ BASE_CSS = """
     .leaderboard-table tr:last-child td {
         border-bottom: 0;
     }
+        .leaderboard-table-wrap {
+        overflow: auto;
+        border: 1px solid #e5e7eb;
+        border-radius: 18px;
+        background: white;
+    }
+    .leaderboard-table {
+        width: 100%;
+        min-width: 900px;
+        border-collapse: collapse;
+    }
+    .leaderboard-table th,
+    .leaderboard-table td {
+        padding: 13px 14px;
+        border-bottom: 1px solid #e5e7eb;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .leaderboard-table th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .leaderboard-table tr:last-child td {
+        border-bottom: 0;
+    }
     .rank-cell {
+        white-space: nowrap;
+        width: 82px;
+    }
+    .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    .rank-inner {
+        position: relative;
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .rank-emoji {
+        font-size: 16px;
+        filter: drop-shadow(0 0 5px rgba(255,255,255,.25));
+    }
+    .rank-top1, .rank-top2, .rank-top3 {
+        min-width: 64px;
+        height: 44px;
+        padding: 0 12px;
+        border-radius: 14px;
+        font-weight: 1000;
+        font-size: 16px;
+        line-height: 1;
+        letter-spacing: .2px;
+        border: 1px solid rgba(255,255,255,.22);
+        text-shadow: 0 0 8px rgba(255,255,255,.22);
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.16),
+            0 8px 18px rgba(0,0,0,.20);
+        isolation: isolate;
+        transform: translateZ(0);
+    }
+    .rank-top1::before, .rank-top2::before, .rank-top3::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        z-index: 0;
+        animation: ledPulse 2.4s ease-in-out infinite alternate;
+    }
+    .rank-top1::after, .rank-top2::after, .rank-top3::after {
+        content: "";
+        position: absolute;
+        top: -35%;
+        left: -20%;
+        width: 34%;
+        height: 165%;
+        transform: rotate(20deg);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
+        z-index: 1;
+        animation: ledShine 2.8s linear infinite;
+        pointer-events: none;
+    }
+    .rank-top1 {
+        color: #fff7d6;
+        background: linear-gradient(135deg, rgba(35,14,1,.92), rgba(120,53,15,.90));
+        box-shadow:
+            0 0 0 1px rgba(251,191,36,.30),
+            0 0 12px rgba(251,191,36,.26),
+            0 0 24px rgba(249,115,22,.18),
+            inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .rank-top1::before {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(255,248,196,.28), transparent 26%),
+            linear-gradient(135deg, #ffd54f 0%, #f59e0b 40%, #f97316 78%, #ef4444 100%);
+        box-shadow:
+            0 0 8px rgba(251,191,36,.46),
+            0 0 18px rgba(249,115,22,.30);
+    }
+    .rank-top2 {
+        color: #f5f3ff;
+        background: linear-gradient(135deg, rgba(18,24,59,.92), rgba(67,56,202,.88));
+        box-shadow:
+            0 0 0 1px rgba(167,139,250,.30),
+            0 0 12px rgba(129,140,248,.24),
+            0 0 24px rgba(56,189,248,.16),
+            inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .rank-top2::before {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(255,255,255,.24), transparent 24%),
+            linear-gradient(135deg, #e2e8f0 0%, #a78bfa 38%, #6366f1 72%, #38bdf8 100%);
+        box-shadow:
+            0 0 8px rgba(167,139,250,.38),
+            0 0 16px rgba(56,189,248,.20);
+    }
+    .rank-top3 {
+        color: #fff1f2;
+        background: linear-gradient(135deg, rgba(67,20,7,.92), rgba(159,18,57,.88));
+        box-shadow:
+            0 0 0 1px rgba(251,146,60,.30),
+            0 0 12px rgba(244,114,182,.22),
+            0 0 24px rgba(251,146,60,.16),
+            inset 0 1px 0 rgba(255,255,255,.16);
+    }
+    .rank-top3::before {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(255,244,214,.24), transparent 24%),
+            linear-gradient(135deg, #fdba74 0%, #fb7185 42%, #f97316 74%, #7c2d12 100%);
+        box-shadow:
+            0 0 8px rgba(251,146,60,.34),
+            0 0 16px rgba(244,114,182,.18);
+    }
+    .rank-normal {
         font-size: 22px;
         font-weight: 950;
-        white-space: nowrap;
+        color: inherit;
     }
-    .leader-name {
-        font-weight: 900;
-        color: #111827;
+    @keyframes ledPulse {
+        from { filter: brightness(1) saturate(1); transform: translateY(0); }
+        to   { filter: brightness(1.1) saturate(1.12); transform: translateY(-1px); }
     }
-    .leader-exam {
-        max-width: 420px;
-        font-weight: 800;
+    @keyframes ledShine {
+        0% { transform: translateX(-160%) rotate(20deg); opacity: .0; }
+        10% { opacity: .16; }
+        45% { opacity: .38; }
+        100% { transform: translateX(420%) rotate(20deg); opacity: 0; }
     }
-    .leader-score {
-        font-size: 18px;
-        font-weight: 950;
-        color: #2563eb;
-        white-space: nowrap;
-    }
-    .leader-small,
-    .leaderboard-note {
-        color: #64748b;
-        font-size: 13px;
-    }
-    [data-theme="dark"] .leader-name-box {
+    [data-theme="dark"] .leaderboard-table-wrap {
         background: #0b1220 !important;
-        border-color: #334155 !important;
-    }
-    [data-theme="dark"] .leaderboard-table-wrap,
-    [data-theme="dark"] .leaderboard-table {
-        background: #0f172a !important;
-        border-color: #334155 !important;
-        color: #e5e7eb !important;
+        border-color: #1f2937 !important;
     }
     [data-theme="dark"] .leaderboard-table th {
         background: #111827 !important;
         color: #cbd5e1 !important;
-        border-color: #334155 !important;
+        border-bottom-color: #334155 !important;
     }
     [data-theme="dark"] .leaderboard-table td {
-        border-color: #334155 !important;
+        color: #e5e7eb !important;
+        border-bottom-color: #1f2937 !important;
+        background: transparent !important;
     }
+    [data-theme="dark"] .leader-exam,
     [data-theme="dark"] .leader-name {
         color: #f8fafc !important;
     }
     [data-theme="dark"] .leader-score {
         color: #60a5fa !important;
     }
+    [data-theme="dark"] .rank-normal {
+        color: #e2e8f0 !important;
+    }
     [data-theme="dark"] .leader-small,
     [data-theme="dark"] .leaderboard-note {
         color: #94a3b8 !important;
+    }
+
+    @media (max-width: 640px) {
+        .rank-cell { width: 74px; }
+        .rank-top1, .rank-top2, .rank-top3 { min-width: 56px; height: 40px; padding: 0 10px; font-size: 14px; }
+        .rank-emoji { font-size: 14px; }
+        .rank-normal { font-size: 18px; }
     }
 
 
@@ -6736,349 +6873,7 @@ BASE_CSS = """
         display: none !important;
     }
 
-
-    /* ===== Khóa đáp án khi làm bài ===== */
-    .answer-lock-btn {
-        width: auto !important;
-        margin: 0 !important;
-        padding: 8px 12px !important;
-        border-radius: 999px !important;
-        border: 1px solid #475569 !important;
-        background: #111827 !important;
-        color: #e5e7eb !important;
-        font-size: 13px !important;
-        font-weight: 850 !important;
-        white-space: nowrap !important;
-        cursor: pointer !important;
-    }
-
-    .answer-lock-btn.locked {
-        background: #052e16 !important;
-        color: #86efac !important;
-        border-color: #16a34a !important;
-    }
-
-    .answer-sheet.answers-locked {
-        position: relative;
-        box-shadow: 0 0 0 2px rgba(34, 197, 94, .35);
-    }
-
-    .answer-sheet.answers-locked input,
-    .answer-sheet.answers-locked select,
-    .answer-sheet.answers-locked textarea,
-    .answer-sheet.answers-locked label,
-    .answer-sheet.answers-locked .circle-choice span,
-    .answer-sheet.answers-locked .tf-choice span,
-    .answer-sheet.answers-locked .digit-choice span,
-    .answer-sheet.answers-locked .clear-short-btn {
-        pointer-events: none !important;
-    }
-
-    .answer-sheet.answers-locked::before {
-        content: "Đáp án đã khóa";
-        position: sticky;
-        top: 8px;
-        z-index: 20;
-        float: right;
-        margin: 8px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: #052e16;
-        color: #86efac;
-        border: 1px solid #16a34a;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-        font-size: 12px;
-        font-weight: 900;
-        pointer-events: none;
-    }
-
-    @media (max-width: 760px) {
-        .answer-lock-btn {
-            padding: 7px 9px !important;
-            font-size: 12px !important;
-        }
-
-        .sheet-top-actions {
-            gap: 6px !important;
-        }
-    }
-
-    @media (max-width: 430px) {
-        .answer-lock-btn {
-            max-width: 90px !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-    }
-
-
-    /* ===== Khóa riêng từng phần đáp án ===== */
-    .sheet-title-actions {
-        display: inline-flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-        flex-wrap: wrap;
-    }
-
-    .section-lock-btn {
-        width: auto !important;
-        margin: 0 !important;
-        padding: 5px 9px !important;
-        border-radius: 999px !important;
-        border: 1px solid #475569 !important;
-        background: #111827 !important;
-        color: #e5e7eb !important;
-        font-size: 12px !important;
-        font-weight: 850 !important;
-        white-space: nowrap !important;
-        cursor: pointer !important;
-    }
-
-    .section-lock-btn.locked {
-        background: #052e16 !important;
-        color: #86efac !important;
-        border-color: #16a34a !important;
-    }
-
-    .lock-section.section-locked {
-        position: relative;
-    }
-
-    .lock-section.section-locked .mc-columns,
-    .lock-section.section-locked .tf-blocks,
-    .lock-section.section-locked .short-answer-grid,
-    .lock-section.section-locked .short-columns,
-    .lock-section.section-locked .short-list {
-        opacity: .38;
-        filter: grayscale(.35);
-        pointer-events: none !important;
-        user-select: none !important;
-        transition: opacity .16s ease, filter .16s ease;
-    }
-
-    .lock-section.section-locked::after {
-        content: "Đã khóa";
-        position: absolute;
-        right: 12px;
-        bottom: 10px;
-        z-index: 10;
-        padding: 5px 9px;
-        border-radius: 999px;
-        background: #052e16;
-        color: #86efac;
-        border: 1px solid #16a34a;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-        font-size: 12px;
-        font-weight: 900;
-        pointer-events: none;
-    }
-
-    @media (max-width: 760px) {
-        .sheet-title {
-            align-items: flex-start !important;
-            gap: 6px !important;
-        }
-
-        .sheet-title-actions {
-            justify-content: flex-start;
-            width: 100%;
-        }
-
-        .section-lock-btn {
-            padding: 5px 8px !important;
-            font-size: 11.5px !important;
-        }
-    }
-
-
-    /* ===== Vị trí nút khóa: nằm bên trái dòng mô tả phần ===== */
-    .sheet-title-actions {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 8px !important;
-        flex-wrap: wrap !important;
-    }
-
-    .sheet-title-actions .section-lock-btn {
-        order: 0 !important;
-    }
-
-    .sheet-title-actions .sheet-caption {
-        order: 1 !important;
-    }
-
-    @media (max-width: 760px) {
-        .sheet-title-actions {
-            justify-content: flex-start !important;
-            width: 100% !important;
-        }
-    }
-
-
-    /* ===== Font đẹp riêng cho nút khóa, không dùng Times New Roman của phiếu ===== */
-    .section-lock-btn,
-    .lock-section.section-locked::after,
-    .answer-lock-btn,
-    .answer-sheet.answers-locked::before {
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
-        letter-spacing: .01em !important;
-    }
-
-    .section-lock-btn {
-        font-size: 12px !important;
-        font-weight: 850 !important;
-        line-height: 1 !important;
-    }
-
-    .lock-section.section-locked::after {
-        font-size: 12px !important;
-        font-weight: 900 !important;
-        line-height: 1 !important;
-    }
-
-
-    /* ===== Fix khóa PHẦN III ===== */
-    .lock-section.section-locked .short-grid,
-    .lock-section.section-locked .short-answer-list,
-    .lock-section.section-locked .short-answer-box,
-    .lock-section.section-locked .short-input-row,
-    .lock-section.section-locked .short-input,
-    .lock-section.section-locked .digit-omr,
-    .lock-section.section-locked .part3-wrap,
-    .lock-section.section-locked .part3-grid {
-        opacity: .38 !important;
-        filter: grayscale(.35) !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-
-    /* ===== Final khóa phần III + nút gọn ===== */
-    .section-lock-btn {
-        min-width: 64px !important;
-        padding: 5px 10px !important;
-        text-align: center !important;
-    }
-
-    .lock-section.section-locked .short-columns,
-    .lock-section.section-locked .short-box,
-    .lock-section.section-locked .short-input-row,
-    .lock-section.section-locked .short-input,
-    .lock-section.section-locked .digit-grid {
-        opacity: .38 !important;
-        filter: grayscale(.35) !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-
-    /* ===== Fix độ mờ PHẦN III: chỉ mờ 1 lớp, không tối chồng nhiều lớp ===== */
-    .lock-section.section-locked .short-columns {
-        opacity: .38 !important;
-        filter: grayscale(.35) !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-    .lock-section.section-locked .short-columns .short-box,
-    .lock-section.section-locked .short-columns .short-title,
-    .lock-section.section-locked .short-columns .short-input-row,
-    .lock-section.section-locked .short-columns .short-input,
-    .lock-section.section-locked .short-columns .clear-short-btn,
-    .lock-section.section-locked .short-columns .digit-grid,
-    .lock-section.section-locked .short-columns .digit-row,
-    .lock-section.section-locked .short-columns .digit-choice {
-        opacity: 1 !important;
-        filter: none !important;
-    }
-
-
-    /* ===== PHẦN III khóa sáng hơn, không tối quá ===== */
-    .lock-section.section-locked[data-section-lock="part3"] .short-columns {
-        opacity: .62 !important;
-        filter: grayscale(.2) !important;
-        pointer-events: none !important;
-        user-select: none !important;
-    }
-
-    .lock-section.section-locked[data-section-lock="part3"] .short-columns *,
-    .lock-section.section-locked[data-section-lock="part3"] .short-box,
-    .lock-section.section-locked[data-section-lock="part3"] .short-input-row,
-    .lock-section.section-locked[data-section-lock="part3"] .short-input,
-    .lock-section.section-locked[data-section-lock="part3"] .clear-short-btn,
-    .lock-section.section-locked[data-section-lock="part3"] .digit-grid,
-    .lock-section.section-locked[data-section-lock="part3"] .digit-row,
-    .lock-section.section-locked[data-section-lock="part3"] .digit-choice,
-    .lock-section.section-locked[data-section-lock="part3"] .digit-choice span {
-        opacity: 1 !important;
-        filter: none !important;
-    }
-
 </style>
-
-<script>
-    (function () {
-        function initSectionLocks() {
-            const form = document.getElementById("quizForm");
-            if (!form) return;
-
-            const keyPrefix = "sectionLocked:" + location.pathname + ":";
-
-            function setLocked(sectionKey, locked) {
-                const section = document.querySelector('[data-section-lock="' + sectionKey + '"]');
-                const btn = document.querySelector('.section-lock-btn[data-lock-target="' + sectionKey + '"]');
-                if (!section || !btn) return;
-
-                section.classList.toggle("section-locked", locked);
-                btn.classList.toggle("locked", locked);
-                btn.setAttribute("aria-pressed", locked ? "true" : "false");
-                btn.textContent = locked ? "🔒 Mở" : "🔓 Khóa";
-
-                try {
-                    localStorage.setItem(keyPrefix + sectionKey, locked ? "1" : "0");
-                } catch (e) {}
-            }
-
-            document.querySelectorAll(".section-lock-btn[data-lock-target]").forEach(function (btn) {
-                const sectionKey = btn.getAttribute("data-lock-target");
-                let saved = "0";
-                try {
-                    saved = localStorage.getItem(keyPrefix + sectionKey) || "0";
-                } catch (e) {}
-
-                setLocked(sectionKey, saved === "1");
-
-                btn.addEventListener("click", function () {
-                    const section = document.querySelector('[data-section-lock="' + sectionKey + '"]');
-                    const nextLocked = !(section && section.classList.contains("section-locked"));
-                    setLocked(sectionKey, nextLocked);
-                });
-            });
-
-            form.addEventListener("submit", function () {
-                document.querySelectorAll(".section-lock-btn[data-lock-target]").forEach(function (btn) {
-                    const sectionKey = btn.getAttribute("data-lock-target");
-                    setLocked(sectionKey, false);
-                    try {
-                        localStorage.removeItem(keyPrefix + sectionKey);
-                    } catch (e) {}
-                });
-            });
-        }
-
-        if (document.readyState === "loading") {
-            document.addEventListener("DOMContentLoaded", initSectionLocks);
-        } else {
-            initSectionLocks();
-        }
-    })();
-</script>
-
-
-
-
 
 <script>
     (function () {
@@ -7570,7 +7365,7 @@ LEADERBOARD_HTML = BASE_CSS + """
 <div class="container">
     <div class="leaderboard-hero">
         <div>
-            <h1>🏆 Bảng xếp hạng Top 10</h1>
+            <h1>🏆 Bảng xếp hạng</h1>
             <p class="muted" style="margin:0">Không cần đăng nhập. Sau khi nộp bài, bạn có thể nhập tên để khoe điểm trên BXH.</p>
         </div>
 
@@ -7628,7 +7423,15 @@ LEADERBOARD_HTML = BASE_CSS + """
                 {% for row in rows %}
                     <tr>
                         <td class="rank-cell">
-                            {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}#{{ loop.index }}{% endif %}
+                            {% if loop.index == 1 %}
+                                <div class="rank-badge rank-top1"><span class="rank-inner"><span class="rank-emoji">👑</span><span>TOP 1</span></span></div>
+                            {% elif loop.index == 2 %}
+                                <div class="rank-badge rank-top2"><span class="rank-inner"><span class="rank-emoji">⚡</span><span>TOP 2</span></span></div>
+                            {% elif loop.index == 3 %}
+                                <div class="rank-badge rank-top3"><span class="rank-inner"><span class="rank-emoji">🔥</span><span>TOP 3</span></span></div>
+                            {% else %}
+                                <span class="rank-normal">#{{ loop.index }}</span>
+                            {% endif %}
                         </td>
                         <td>
                             <div class="leader-name">
@@ -7644,7 +7447,7 @@ LEADERBOARD_HTML = BASE_CSS + """
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="7" class="muted">Chưa có lượt nộp nào để xếp hạng Top 10.</td>
+                        <td colspan="7" class="muted">Chưa có lượt nộp nào để xếp hạng.</td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -7652,7 +7455,7 @@ LEADERBOARD_HTML = BASE_CSS + """
     </div>
 
     <p class="leaderboard-note">
-        BXH chỉ hiển thị Top 10. Xếp theo điểm cao trước, nếu bằng điểm thì thời gian làm bài ngắn hơn xếp trên.
+        BXH xếp theo điểm cao trước, nếu bằng điểm thì thời gian làm bài ngắn hơn xếp trên.
     </p>
 </div>
 """
@@ -8171,13 +7974,10 @@ TAKE_EXAM_HTML = BASE_CSS + """
                 </p>
 
                 <div class="answer-sheet">
-                    <div class="sheet-section lock-section" data-section-lock="part1">
+                    <div class="sheet-section">
                         <div class="sheet-title">
                             <span>PHẦN I</span>
-                            <div class="sheet-title-actions">
-                                <button type="button" class="section-lock-btn" data-lock-target="part1">🔓 Khóa</button>
-                                <span class="sheet-caption">Tô một đáp án đúng <i class="scan-mark"></i></span>
-                            </div>
+                            <span class="sheet-caption">Tô một đáp án đúng <i class="scan-mark"></i></span>
                         </div>
 
                         <div class="mc-columns">
@@ -8208,13 +8008,10 @@ TAKE_EXAM_HTML = BASE_CSS + """
                     </div>
 
                     {% if cfg.part2_count > 0 %}
-                        <div class="sheet-section lock-section" data-section-lock="part2">
+                        <div class="sheet-section">
                             <div class="sheet-title">
                                 <span>PHẦN II</span>
-                                <div class="sheet-title-actions">
-                                    <button type="button" class="section-lock-btn" data-lock-target="part2">🔓 KhóaI</button>
-                                    <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
-                                </div>
+                                <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
                             </div>
 
                             <div class="tf-blocks">
@@ -8247,13 +8044,10 @@ TAKE_EXAM_HTML = BASE_CSS + """
                     {% endif %}
 
                     {% if cfg.part3_count > 0 %}
-                        <div class="sheet-section lock-section" data-section-lock="part3">
+                        <div class="sheet-section">
                             <div class="sheet-title">
                                 <span>PHẦN III</span>
-                                <div class="sheet-title-actions">
-                                    <button type="button" class="section-lock-btn" data-lock-target="part3">🔓 Khóa</button>
-                                    <span class="sheet-caption">Nhập đáp án, có mô phỏng tô số <i class="scan-mark"></i></span>
-                                </div>
+                                <span class="sheet-caption">Nhập đáp án, có mô phỏng tô số <i class="scan-mark"></i></span>
                             </div>
 
                             <div class="short-columns">
