@@ -7368,8 +7368,71 @@ BASE_CSS = """
         width: auto !important;
     }
 
+
+    /* ===== Khôi phục style chữ BXH giống bản cũ ===== */
+    .leaderboard-table td {
+        font-weight: 600;
+    }
+    .leader-name {
+        font-weight: 850 !important;
+        color: #111827 !important;
+    }
+    .leader-exam {
+        font-weight: 820 !important;
+        color: #111827 !important;
+    }
+    .leader-score {
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        color: #3b82f6 !important;
+        white-space: nowrap;
+    }
+    .leader-small {
+        color: #64748b !important;
+        font-weight: 500;
+    }
+
+    [data-theme="dark"] .leaderboard-table td {
+        color: #e5e7eb !important;
+    }
+    [data-theme="dark"] .leader-name,
+    [data-theme="dark"] .leader-exam {
+        color: #f8fafc !important;
+        font-weight: 850 !important;
+    }
+    [data-theme="dark"] .leader-score {
+        color: #60a5fa !important;
+        font-weight: 950 !important;
+    }
+    [data-theme="dark"] .leader-small {
+        color: #94a3b8 !important;
+    }
+
     .nowrap {
         white-space: nowrap;
+    }
+
+
+    /* ===== Fix màu điểm BXH về xanh cũ, override mọi màu td ===== */
+    .leaderboard-table td.leader-score,
+    .leaderboard-table .leader-score,
+    td.leader-score {
+        color: #60a5fa !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        white-space: nowrap !important;
+    }
+
+    html[data-theme="light"] .leaderboard-table td.leader-score,
+    html[data-theme="light"] .leaderboard-table .leader-score,
+    html[data-theme="light"] td.leader-score {
+        color: #3b82f6 !important;
+    }
+
+    html[data-theme="dark"] .leaderboard-table td.leader-score,
+    html[data-theme="dark"] .leaderboard-table .leader-score,
+    html[data-theme="dark"] td.leader-score {
+        color: #60a5fa !important;
     }
 
 </style>
