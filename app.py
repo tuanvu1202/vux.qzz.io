@@ -7230,25 +7230,6 @@ BASE_CSS = """
     }
 
     .rank-top1 {
-        color: #fff7d6;
-        background: linear-gradient(135deg, rgba(35,14,1,.92), rgba(120,53,15,.90));
-        box-shadow:
-            0 0 0 1px rgba(251,191,36,.30),
-            0 0 12px rgba(251,191,36,.26),
-            0 0 24px rgba(249,115,22,.18),
-            inset 0 1px 0 rgba(255,255,255,.16);
-    }
-
-    .rank-top1::before {
-        background:
-            radial-gradient(circle at 18% 18%, rgba(255,248,196,.28), transparent 26%),
-            linear-gradient(135deg, #ffd54f 0%, #f59e0b 40%, #f97316 78%, #ef4444 100%);
-        box-shadow:
-            0 0 8px rgba(251,191,36,.46),
-            0 0 18px rgba(249,115,22,.30);
-    }
-
-    .rank-top2 {
         color: #f5f3ff;
         background: linear-gradient(135deg, rgba(18,24,59,.92), rgba(67,56,202,.88));
         box-shadow:
@@ -7258,13 +7239,32 @@ BASE_CSS = """
             inset 0 1px 0 rgba(255,255,255,.16);
     }
 
-    .rank-top2::before {
+    .rank-top1::before {
         background:
             radial-gradient(circle at 18% 18%, rgba(255,255,255,.24), transparent 24%),
             linear-gradient(135deg, #e2e8f0 0%, #a78bfa 38%, #6366f1 72%, #38bdf8 100%);
         box-shadow:
             0 0 8px rgba(167,139,250,.38),
             0 0 16px rgba(56,189,248,.20);
+    }
+
+    .rank-top2 {
+        color: #ecfeff;
+        background: linear-gradient(135deg, rgba(6,22,33,.94), rgba(8,51,68,.90));
+        box-shadow:
+            0 0 0 1px rgba(103,232,249,.28),
+            0 0 12px rgba(34,211,238,.22),
+            0 0 24px rgba(16,185,129,.16),
+            inset 0 1px 0 rgba(255,255,255,.16);
+    }
+
+    .rank-top2::before {
+        background:
+            radial-gradient(circle at 18% 18%, rgba(255,255,255,.24), transparent 24%),
+            linear-gradient(135deg, #ecfeff 0%, #67e8f9 34%, #22d3ee 66%, #14b8a6 100%);
+        box-shadow:
+            0 0 8px rgba(34,211,238,.34),
+            0 0 16px rgba(20,184,166,.20);
     }
 
     .rank-top3 {
