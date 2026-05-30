@@ -6736,7 +6736,349 @@ BASE_CSS = """
         display: none !important;
     }
 
+
+    /* ===== Khóa đáp án khi làm bài ===== */
+    .answer-lock-btn {
+        width: auto !important;
+        margin: 0 !important;
+        padding: 8px 12px !important;
+        border-radius: 999px !important;
+        border: 1px solid #475569 !important;
+        background: #111827 !important;
+        color: #e5e7eb !important;
+        font-size: 13px !important;
+        font-weight: 850 !important;
+        white-space: nowrap !important;
+        cursor: pointer !important;
+    }
+
+    .answer-lock-btn.locked {
+        background: #052e16 !important;
+        color: #86efac !important;
+        border-color: #16a34a !important;
+    }
+
+    .answer-sheet.answers-locked {
+        position: relative;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, .35);
+    }
+
+    .answer-sheet.answers-locked input,
+    .answer-sheet.answers-locked select,
+    .answer-sheet.answers-locked textarea,
+    .answer-sheet.answers-locked label,
+    .answer-sheet.answers-locked .circle-choice span,
+    .answer-sheet.answers-locked .tf-choice span,
+    .answer-sheet.answers-locked .digit-choice span,
+    .answer-sheet.answers-locked .clear-short-btn {
+        pointer-events: none !important;
+    }
+
+    .answer-sheet.answers-locked::before {
+        content: "Đáp án đã khóa";
+        position: sticky;
+        top: 8px;
+        z-index: 20;
+        float: right;
+        margin: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: #052e16;
+        color: #86efac;
+        border: 1px solid #16a34a;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        font-size: 12px;
+        font-weight: 900;
+        pointer-events: none;
+    }
+
+    @media (max-width: 760px) {
+        .answer-lock-btn {
+            padding: 7px 9px !important;
+            font-size: 12px !important;
+        }
+
+        .sheet-top-actions {
+            gap: 6px !important;
+        }
+    }
+
+    @media (max-width: 430px) {
+        .answer-lock-btn {
+            max-width: 90px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+    }
+
+
+    /* ===== Khóa riêng từng phần đáp án ===== */
+    .sheet-title-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .section-lock-btn {
+        width: auto !important;
+        margin: 0 !important;
+        padding: 5px 9px !important;
+        border-radius: 999px !important;
+        border: 1px solid #475569 !important;
+        background: #111827 !important;
+        color: #e5e7eb !important;
+        font-size: 12px !important;
+        font-weight: 850 !important;
+        white-space: nowrap !important;
+        cursor: pointer !important;
+    }
+
+    .section-lock-btn.locked {
+        background: #052e16 !important;
+        color: #86efac !important;
+        border-color: #16a34a !important;
+    }
+
+    .lock-section.section-locked {
+        position: relative;
+    }
+
+    .lock-section.section-locked .mc-columns,
+    .lock-section.section-locked .tf-blocks,
+    .lock-section.section-locked .short-answer-grid,
+    .lock-section.section-locked .short-columns,
+    .lock-section.section-locked .short-list {
+        opacity: .38;
+        filter: grayscale(.35);
+        pointer-events: none !important;
+        user-select: none !important;
+        transition: opacity .16s ease, filter .16s ease;
+    }
+
+    .lock-section.section-locked::after {
+        content: "Đã khóa";
+        position: absolute;
+        right: 12px;
+        bottom: 10px;
+        z-index: 10;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #052e16;
+        color: #86efac;
+        border: 1px solid #16a34a;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+        font-size: 12px;
+        font-weight: 900;
+        pointer-events: none;
+    }
+
+    @media (max-width: 760px) {
+        .sheet-title {
+            align-items: flex-start !important;
+            gap: 6px !important;
+        }
+
+        .sheet-title-actions {
+            justify-content: flex-start;
+            width: 100%;
+        }
+
+        .section-lock-btn {
+            padding: 5px 8px !important;
+            font-size: 11.5px !important;
+        }
+    }
+
+
+    /* ===== Vị trí nút khóa: nằm bên trái dòng mô tả phần ===== */
+    .sheet-title-actions {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .sheet-title-actions .section-lock-btn {
+        order: 0 !important;
+    }
+
+    .sheet-title-actions .sheet-caption {
+        order: 1 !important;
+    }
+
+    @media (max-width: 760px) {
+        .sheet-title-actions {
+            justify-content: flex-start !important;
+            width: 100% !important;
+        }
+    }
+
+
+    /* ===== Font đẹp riêng cho nút khóa, không dùng Times New Roman của phiếu ===== */
+    .section-lock-btn,
+    .lock-section.section-locked::after,
+    .answer-lock-btn,
+    .answer-sheet.answers-locked::before {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+        letter-spacing: .01em !important;
+    }
+
+    .section-lock-btn {
+        font-size: 12px !important;
+        font-weight: 850 !important;
+        line-height: 1 !important;
+    }
+
+    .lock-section.section-locked::after {
+        font-size: 12px !important;
+        font-weight: 900 !important;
+        line-height: 1 !important;
+    }
+
+
+    /* ===== Fix khóa PHẦN III ===== */
+    .lock-section.section-locked .short-grid,
+    .lock-section.section-locked .short-answer-list,
+    .lock-section.section-locked .short-answer-box,
+    .lock-section.section-locked .short-input-row,
+    .lock-section.section-locked .short-input,
+    .lock-section.section-locked .digit-omr,
+    .lock-section.section-locked .part3-wrap,
+    .lock-section.section-locked .part3-grid {
+        opacity: .38 !important;
+        filter: grayscale(.35) !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+
+
+    /* ===== Final khóa phần III + nút gọn ===== */
+    .section-lock-btn {
+        min-width: 64px !important;
+        padding: 5px 10px !important;
+        text-align: center !important;
+    }
+
+    .lock-section.section-locked .short-columns,
+    .lock-section.section-locked .short-box,
+    .lock-section.section-locked .short-input-row,
+    .lock-section.section-locked .short-input,
+    .lock-section.section-locked .digit-grid {
+        opacity: .38 !important;
+        filter: grayscale(.35) !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+
+
+    /* ===== Fix độ mờ PHẦN III: chỉ mờ 1 lớp, không tối chồng nhiều lớp ===== */
+    .lock-section.section-locked .short-columns {
+        opacity: .38 !important;
+        filter: grayscale(.35) !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+
+    .lock-section.section-locked .short-columns .short-box,
+    .lock-section.section-locked .short-columns .short-title,
+    .lock-section.section-locked .short-columns .short-input-row,
+    .lock-section.section-locked .short-columns .short-input,
+    .lock-section.section-locked .short-columns .clear-short-btn,
+    .lock-section.section-locked .short-columns .digit-grid,
+    .lock-section.section-locked .short-columns .digit-row,
+    .lock-section.section-locked .short-columns .digit-choice {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+
+
+    /* ===== PHẦN III khóa sáng hơn, không tối quá ===== */
+    .lock-section.section-locked[data-section-lock="part3"] .short-columns {
+        opacity: .62 !important;
+        filter: grayscale(.2) !important;
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+
+    .lock-section.section-locked[data-section-lock="part3"] .short-columns *,
+    .lock-section.section-locked[data-section-lock="part3"] .short-box,
+    .lock-section.section-locked[data-section-lock="part3"] .short-input-row,
+    .lock-section.section-locked[data-section-lock="part3"] .short-input,
+    .lock-section.section-locked[data-section-lock="part3"] .clear-short-btn,
+    .lock-section.section-locked[data-section-lock="part3"] .digit-grid,
+    .lock-section.section-locked[data-section-lock="part3"] .digit-row,
+    .lock-section.section-locked[data-section-lock="part3"] .digit-choice,
+    .lock-section.section-locked[data-section-lock="part3"] .digit-choice span {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+
 </style>
+
+<script>
+    (function () {
+        function initSectionLocks() {
+            const form = document.getElementById("quizForm");
+            if (!form) return;
+
+            const keyPrefix = "sectionLocked:" + location.pathname + ":";
+
+            function setLocked(sectionKey, locked) {
+                const section = document.querySelector('[data-section-lock="' + sectionKey + '"]');
+                const btn = document.querySelector('.section-lock-btn[data-lock-target="' + sectionKey + '"]');
+                if (!section || !btn) return;
+
+                section.classList.toggle("section-locked", locked);
+                btn.classList.toggle("locked", locked);
+                btn.setAttribute("aria-pressed", locked ? "true" : "false");
+                btn.textContent = locked ? "🔒 Mở" : "🔓 Khóa";
+
+                try {
+                    localStorage.setItem(keyPrefix + sectionKey, locked ? "1" : "0");
+                } catch (e) {}
+            }
+
+            document.querySelectorAll(".section-lock-btn[data-lock-target]").forEach(function (btn) {
+                const sectionKey = btn.getAttribute("data-lock-target");
+                let saved = "0";
+                try {
+                    saved = localStorage.getItem(keyPrefix + sectionKey) || "0";
+                } catch (e) {}
+
+                setLocked(sectionKey, saved === "1");
+
+                btn.addEventListener("click", function () {
+                    const section = document.querySelector('[data-section-lock="' + sectionKey + '"]');
+                    const nextLocked = !(section && section.classList.contains("section-locked"));
+                    setLocked(sectionKey, nextLocked);
+                });
+            });
+
+            form.addEventListener("submit", function () {
+                document.querySelectorAll(".section-lock-btn[data-lock-target]").forEach(function (btn) {
+                    const sectionKey = btn.getAttribute("data-lock-target");
+                    setLocked(sectionKey, false);
+                    try {
+                        localStorage.removeItem(keyPrefix + sectionKey);
+                    } catch (e) {}
+                });
+            });
+        }
+
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initSectionLocks);
+        } else {
+            initSectionLocks();
+        }
+    })();
+</script>
+
+
+
+
 
 <script>
     (function () {
@@ -7829,10 +8171,13 @@ TAKE_EXAM_HTML = BASE_CSS + """
                 </p>
 
                 <div class="answer-sheet">
-                    <div class="sheet-section">
+                    <div class="sheet-section lock-section" data-section-lock="part1">
                         <div class="sheet-title">
                             <span>PHẦN I</span>
-                            <span class="sheet-caption">Tô một đáp án đúng <i class="scan-mark"></i></span>
+                            <div class="sheet-title-actions">
+                                <button type="button" class="section-lock-btn" data-lock-target="part1">🔓 Khóa</button>
+                                <span class="sheet-caption">Tô một đáp án đúng <i class="scan-mark"></i></span>
+                            </div>
                         </div>
 
                         <div class="mc-columns">
@@ -7863,10 +8208,13 @@ TAKE_EXAM_HTML = BASE_CSS + """
                     </div>
 
                     {% if cfg.part2_count > 0 %}
-                        <div class="sheet-section">
+                        <div class="sheet-section lock-section" data-section-lock="part2">
                             <div class="sheet-title">
                                 <span>PHẦN II</span>
-                                <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
+                                <div class="sheet-title-actions">
+                                    <button type="button" class="section-lock-btn" data-lock-target="part2">🔓 KhóaI</button>
+                                    <span class="sheet-caption">Đúng / Sai <i class="scan-mark"></i></span>
+                                </div>
                             </div>
 
                             <div class="tf-blocks">
@@ -7899,10 +8247,13 @@ TAKE_EXAM_HTML = BASE_CSS + """
                     {% endif %}
 
                     {% if cfg.part3_count > 0 %}
-                        <div class="sheet-section">
+                        <div class="sheet-section lock-section" data-section-lock="part3">
                             <div class="sheet-title">
                                 <span>PHẦN III</span>
-                                <span class="sheet-caption">Nhập đáp án, có mô phỏng tô số <i class="scan-mark"></i></span>
+                                <div class="sheet-title-actions">
+                                    <button type="button" class="section-lock-btn" data-lock-target="part3">🔓 Khóa</button>
+                                    <span class="sheet-caption">Nhập đáp án, có mô phỏng tô số <i class="scan-mark"></i></span>
+                                </div>
                             </div>
 
                             <div class="short-columns">
