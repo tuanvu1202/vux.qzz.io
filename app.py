@@ -669,6 +669,152 @@ def build_result_summary(results: dict, score: float, max_score: float) -> dict:
     }
 
 
+
+def regrade_saved_results_with_answers(subject: str, saved_results: dict, answers: dict):
+    """
+    Chấm lại một lượt nộp cũ theo đáp án hiện tại.
+    Dùng user answer đã lưu trong result_json, thay right/ok/point theo đáp án mới.
+    """
+    cfg = SUBJECTS[subject]
+    new_results = {"part1": [], "part2": [], "part3": []}
+    score = 0.0
+
+    old_p1 = {str(r.get("number")): r for r in saved_results.get("part1", [])}
+    for n in range(1, cfg["part1_count"] + 1):
+        n_str = str(n)
+        old = old_p1.get(n_str, {})
+        user_ans = str(old.get("user") or "").strip().upper()
+        right_ans = answers.get("part1", {}).get(n_str, "")
+        ok = user_ans == right_ans and right_ans != ""
+        point = cfg["part1_point"] if ok else 0
+        score += point
+        new_results["part1"].append({
+            "number": n,
+            "user": user_ans,
+            "right": right_ans,
+            "ok": ok,
+            "point": point,
+        })
+
+    old_p2 = {str(r.get("number")): r for r in saved_results.get("part2", [])}
+    for n in range(1, cfg["part2_count"] + 1):
+        n_str = str(n)
+        old = old_p2.get(n_str, {})
+        old_items = {item.get("letter"): item for item in old.get("items", [])}
+        right_map = answers.get("part2", {}).get(n_str, {})
+        correct_count = 0
+        items = []
+
+        for letter in ["a", "b", "c", "d"]:
+            old_item = old_items.get(letter, {})
+            user_bool = old_item.get("user", None)
+            right_bool = right_map.get(letter, None)
+            ok = user_bool is not None and right_bool is not None and user_bool == right_bool
+            if ok:
+                correct_count += 1
+            items.append({
+                "letter": letter,
+                "user": user_bool,
+                "right": right_bool,
+                "ok": ok,
+            })
+
+        part2_point = PART2_SCORE_MAP.get(correct_count, 0)
+        score += part2_point
+        new_results["part2"].append({
+            "number": n,
+            "correct_count": correct_count,
+            "point": part2_point,
+            "items": items,
+        })
+
+    old_p3 = {str(r.get("number")): r for r in saved_results.get("part3", [])}
+    for n in range(1, cfg["part3_count"] + 1):
+        n_str = str(n)
+        old = old_p3.get(n_str, {})
+        user_ans = str(old.get("user") or "").strip()
+        right_ans = answers.get("part3", {}).get(n_str, "")
+        ok = answer_equal(user_ans, right_ans)
+        point = cfg["part3_point"] if ok else 0
+        score += point
+        new_results["part3"].append({
+            "number": n,
+            "user": user_ans,
+            "right": right_ans,
+            "ok": ok,
+            "point": point,
+        })
+
+    score = round(score, 2)
+    max_score = calculate_total_max_score(subject)
+    summary = build_result_summary(new_results, score, max_score)
+    return new_results, summary, score, max_score
+
+
+def recalculate_exam_submission_logs(exam_id: int) -> int:
+    """
+    Chấm lại toàn bộ lượt nộp của một đề sau khi admin sửa đáp án.
+    Chỉ chấm lại được các lượt có result_json, tức các lượt nộp từ khi có chức năng xem lại bài.
+    """
+    conn = db()
+    exam = conn.execute("SELECT * FROM exams WHERE id=?", (exam_id,)).fetchone()
+    if not exam:
+        conn.close()
+        return 0
+
+    subject = exam["subject"]
+    data = json.loads(exam["data_json"])
+    answers = data.get("answers", {})
+
+    logs = conn.execute(
+        """
+        SELECT id, result_json
+        FROM submission_logs
+        WHERE exam_id=? AND result_json IS NOT NULL AND result_json != ''
+        """,
+        (exam_id,),
+    ).fetchall()
+
+    updated = 0
+    for log in logs:
+        try:
+            payload = json.loads(log["result_json"] or "{}")
+            old_results = payload.get("results") or {}
+            new_results, summary, score, max_score = regrade_saved_results_with_answers(subject, old_results, answers)
+
+            payload.update({
+                "results": new_results,
+                "summary": summary,
+                "score": float(score),
+                "max_score": float(max_score),
+                "score_text": format_score(score),
+                "max_score_text": format_score(max_score),
+                "regraded_at": datetime.now().isoformat(timespec="seconds"),
+            })
+
+            conn.execute(
+                """
+                UPDATE submission_logs
+                SET score=?, max_score=?, wrong_total=?, result_json=?
+                WHERE id=?
+                """,
+                (
+                    score,
+                    max_score,
+                    summary.get("wrong_total", 0),
+                    json.dumps(payload, ensure_ascii=False),
+                    log["id"],
+                ),
+            )
+            updated += 1
+        except Exception:
+            # Bỏ qua log hỏng/đời cũ để không làm sập admin.
+            continue
+
+    conn.commit()
+    conn.close()
+    return updated
+
 def get_client_ip() -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
@@ -1217,6 +1363,10 @@ def admin_edit_answers(exam_id):
         )
         conn.commit()
         conn.close()
+
+        # Sau khi sửa đáp án, chấm lại các lượt nộp cũ để BXH cập nhật điểm.
+        recalculate_exam_submission_logs(exam_id)
+
         return redirect(url_for("admin_preview", exam_id=exam_id))
 
     conn.close()
@@ -1231,6 +1381,14 @@ def admin_edit_answers(exam_id):
         part2_numbers=range(1, cfg["part2_count"] + 1),
         part3_numbers=range(1, cfg["part3_count"] + 1),
     )
+
+
+
+@app.route("/admin/regrade-exam/<int:exam_id>", methods=["POST"])
+def admin_regrade_exam(exam_id):
+    require_admin()
+    updated = recalculate_exam_submission_logs(exam_id)
+    return redirect(url_for("admin_edit_answers", exam_id=exam_id, regraded=updated))
 
 
 @app.route("/admin/preview/<int:exam_id>")
@@ -7435,6 +7593,17 @@ BASE_CSS = """
         color: #60a5fa !important;
     }
 
+
+    .ok-box {
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid #22c55e;
+        background: rgba(34,197,94,.12);
+        color: #16a34a;
+        font-weight: 850;
+        margin: 8px 0 10px;
+    }
+
 </style>
 
 <script>
@@ -8486,6 +8655,17 @@ EDIT_ANSWERS_HTML = BASE_CSS + """
                         <input type="checkbox" name="remove_answer_page" value="1" style="width:auto; margin-right:8px">
                         Xóa trang đáp án cuối nếu file đề mới có đáp án ở cuối
                     </label>
+                </form>
+            </div>
+
+            <div class="card compact-admin-card">
+                <h2>Chấm lại BXH</h2>
+                <p class="muted">Dùng khi bạn đã sửa đáp án và muốn cập nhật lại điểm các lượt đã nộp.</p>
+                {% if request.args.get("regraded") %}
+                    <div class="ok-box">Đã chấm lại {{ request.args.get("regraded") }} lượt có dữ liệu xem lại.</div>
+                {% endif %}
+                <form method="post" action="{{ url_for('admin_regrade_exam', exam_id=exam.id) }}" onsubmit="return confirm('Chấm lại điểm các lượt đã nộp của đề này?')">
+                    <button type="submit">Chấm lại BXH</button>
                 </form>
             </div>
 
